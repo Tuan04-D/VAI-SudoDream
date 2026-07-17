@@ -62,19 +62,19 @@ python -m app.cli "Xã cần tra" --latitude 21.90 --longitude 103.40 --raw
 ## Chạy API
 
 ```powershell
-uvicorn app.api:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.api:app --host 0.0.0.0 --port 8001 --reload
 ```
 
-Swagger UI: `http://localhost:8000/docs`
+Swagger UI: `http://localhost:8001/docs`
 
 `0.0.0.0` chỉ dùng cho tham số `--host` để server lắng nghe mọi interface, không
-phải địa chỉ mở trên trình duyệt. Khi chạy local, mở `http://127.0.0.1:8000/docs`
-hoặc `http://localhost:8000/docs`.
+phải địa chỉ mở trên trình duyệt. Khi chạy local, mở `http://127.0.0.1:8001/docs`
+hoặc `http://localhost:8001/docs`.
 
 Tạo bản tin:
 
 ```powershell
-curl.exe -X POST "http://localhost:8000/api/v1/advisories" `
+  curl.exe -X POST "http://localhost:8001/api/v1/advisories" `
   -H "Content-Type: application/json" `
   -d '{"commune":"Tủa Chùa","days":3}'
 ```
