@@ -38,6 +38,29 @@ WEATHER_CODES = {
 }
 
 
+def weather_condition_ui(code: int) -> dict[str, str]:
+    """Return stable presentation metadata so clients do not parse Vietnamese text."""
+    if code == 0:
+        return {"icon_key": "clear", "icon": "☀️"}
+    if code in {1, 2}:
+        return {"icon_key": "partly_cloudy", "icon": "⛅"}
+    if code == 3:
+        return {"icon_key": "cloudy", "icon": "☁️"}
+    if code in {45, 48}:
+        return {"icon_key": "fog", "icon": "🌫️"}
+    if code in {51, 53, 55, 61, 63, 80, 81}:
+        return {"icon_key": "rain", "icon": "🌧️"}
+    if code in {65, 82}:
+        return {"icon_key": "heavy_rain", "icon": "🌧️"}
+    if code in {71, 73, 75}:
+        return {"icon_key": "snow", "icon": "🌨️"}
+    if code == 95:
+        return {"icon_key": "thunderstorm", "icon": "⛈️"}
+    if code in {96, 99}:
+        return {"icon_key": "hail", "icon": "⛈️"}
+    return {"icon_key": "unknown", "icon": "❓"}
+
+
 def _values(payload: dict[str, Any], section: str, key: str) -> list[Any]:
     value = payload.get(section, {}).get(key, [])
     return value if isinstance(value, list) else []
@@ -51,12 +74,15 @@ def _number(value: Any, default: float = 0.0) -> float:
 
 
 def summarize_forecast(payload: dict[str, Any], days: int) -> dict[str, Any]:
-    hourly = payload.get("hourly", {})
     times = _values(payload, "hourly", "time")[: days * 24]
     temperature = _values(payload, "hourly", "temperature_2m")
+    apparent_temperature = _values(payload, "hourly", "apparent_temperature")
     precipitation = _values(payload, "hourly", "precipitation")
     probability = _values(payload, "hourly", "precipitation_probability")
     humidity = _values(payload, "hourly", "relative_humidity_2m")
+    visibility = _values(payload, "hourly", "visibility")
+    wind_speed = _values(payload, "hourly", "wind_speed_10m")
+    wind_direction = _values(payload, "hourly", "wind_direction_10m")
     gusts = _values(payload, "hourly", "wind_gusts_10m")
     codes = _values(payload, "hourly", "weather_code")
 
@@ -64,27 +90,54 @@ def summarize_forecast(payload: dict[str, Any], days: int) -> dict[str, Any]:
     for start in range(0, len(times), 6):
         end = min(start + 6, len(times))
         temp_slice = [_number(v) for v in temperature[start:end]]
+        apparent_slice = [_number(v) for v in apparent_temperature[start:end]]
         rain_slice = [_number(v) for v in precipitation[start:end]]
         prob_slice = [_number(v) for v in probability[start:end]]
         humidity_slice = [_number(v) for v in humidity[start:end]]
+        visibility_slice = [_number(v) for v in visibility[start:end]]
+        wind_speed_slice = [_number(v) for v in wind_speed[start:end]]
+        wind_direction_slice = [_number(v) for v in wind_direction[start:end]]
         gust_slice = [_number(v) for v in gusts[start:end]]
         code_slice = [int(_number(v)) for v in codes[start:end]]
         if not temp_slice:
             continue
         dominant_code = Counter(code_slice).most_common(1)[0][0] if code_slice else 0
+        strongest_wind_index = (
+            wind_speed_slice.index(max(wind_speed_slice)) if wind_speed_slice else None
+        )
         periods.append(
             {
                 "from": times[start],
                 "to": times[end - 1],
+                "weather_code": dominant_code,
                 "condition": WEATHER_CODES.get(dominant_code, f"Mã WMO {dominant_code}"),
+                **weather_condition_ui(dominant_code),
                 "temperature_min_c": round(min(temp_slice), 1),
                 "temperature_max_c": round(max(temp_slice), 1),
+                "apparent_temperature_min_c": round(min(apparent_slice), 1)
+                if apparent_slice
+                else None,
+                "apparent_temperature_max_c": round(max(apparent_slice), 1)
+                if apparent_slice
+                else None,
                 "rain_mm": round(sum(rain_slice), 1),
                 "rain_probability_max_percent": round(max(prob_slice), 0)
                 if prob_slice
                 else None,
                 "humidity_max_percent": round(max(humidity_slice), 0)
                 if humidity_slice
+                else None,
+                "visibility_min_m": round(min(visibility_slice), 0)
+                if visibility_slice
+                else None,
+                "wind_speed_max_kmh": round(max(wind_speed_slice), 1)
+                if wind_speed_slice
+                else None,
+                "wind_direction_at_max_deg": round(
+                    wind_direction_slice[strongest_wind_index], 0
+                )
+                if strongest_wind_index is not None
+                and strongest_wind_index < len(wind_direction_slice)
                 else None,
                 "wind_gust_max_kmh": round(max(gust_slice), 1) if gust_slice else None,
             }
@@ -101,12 +154,19 @@ def summarize_forecast(payload: dict[str, Any], days: int) -> dict[str, Any]:
         daily.append(
             {
                 "date": day,
+                "weather_code": code,
                 "condition": WEATHER_CODES.get(code, f"Mã WMO {code}"),
+                **weather_condition_ui(code),
                 "temperature_min_c": at("temperature_2m_min"),
                 "temperature_max_c": at("temperature_2m_max"),
+                "apparent_temperature_min_c": at("apparent_temperature_min"),
+                "apparent_temperature_max_c": at("apparent_temperature_max"),
                 "rain_sum_mm": at("precipitation_sum"),
+                "rain_hours": at("precipitation_hours"),
                 "rain_probability_max_percent": at("precipitation_probability_max"),
                 "wind_gust_max_kmh": at("wind_gusts_10m_max"),
+                "sunrise": at("sunrise"),
+                "sunset": at("sunset"),
             }
         )
 
@@ -119,7 +179,16 @@ def summarize_forecast(payload: dict[str, Any], days: int) -> dict[str, Any]:
     max_gust = max(
         (_number(item["wind_gust_max_kmh"]) for item in daily), default=0
     )
-    fog_periods = [item["from"] for item in periods if "Sương mù" in item["condition"]]
+    fog_periods = [
+        item
+        for item in periods
+        if item["icon_key"] == "fog"
+        or (
+            item.get("visibility_min_m") is not None
+            and item["visibility_min_m"] <= 1000
+        )
+    ]
+    storm_codes = [code for code in codes[: days * 24] if int(_number(code)) >= 95]
 
     if max_period_rain >= 30 or max_daily_rain >= 50:
         signals.append(
@@ -146,11 +215,34 @@ def summarize_forecast(payload: dict[str, Any], days: int) -> dict[str, Any]:
             }
         )
     if fog_periods:
+        minimum_visibility = min(
+            (
+                _number(item.get("visibility_min_m"), 1001)
+                for item in fog_periods
+            ),
+            default=1001,
+        )
         signals.append(
             {
                 "type": "fog",
-                "severity": 1,
-                "evidence": f"Có tín hiệu sương mù từ {fog_periods[0]}",
+                "severity": 2 if minimum_visibility <= 500 else 1,
+                "evidence": (
+                    f"Có tín hiệu sương mù từ {fog_periods[0]['from']}; "
+                    f"tầm nhìn thấp nhất {minimum_visibility:.0f} m"
+                    if minimum_visibility <= 1000
+                    else f"Có tín hiệu sương mù từ {fog_periods[0]['from']}"
+                ),
+            }
+        )
+    if storm_codes:
+        has_hail = any(int(_number(code)) in {96, 99} for code in storm_codes)
+        signals.append(
+            {
+                "type": "thunderstorm_hail" if has_hail else "thunderstorm",
+                "severity": 3 if has_hail else 2,
+                "evidence": "Mô hình dự báo có dông kèm mưa đá"
+                if has_hail
+                else "Mô hình dự báo có dông",
             }
         )
     if max_gust >= 50:
@@ -177,9 +269,18 @@ def summarize_forecast(payload: dict[str, Any], days: int) -> dict[str, Any]:
         "model_timezone": payload.get("timezone"),
         "current": {
             "time": current.get("time"),
+            "weather_code": current_code,
             "condition": WEATHER_CODES.get(current_code, f"Mã WMO {current_code}"),
+            **weather_condition_ui(current_code),
             "temperature_c": current.get("temperature_2m"),
+            "apparent_temperature_c": current.get("apparent_temperature"),
+            "humidity_percent": current.get("relative_humidity_2m"),
             "precipitation_mm": current.get("precipitation"),
+            "rain_mm": current.get("rain"),
+            "cloud_cover_percent": current.get("cloud_cover"),
+            "visibility_m": current.get("visibility"),
+            "wind_speed_kmh": current.get("wind_speed_10m"),
+            "wind_direction_deg": current.get("wind_direction_10m"),
             "wind_gust_kmh": current.get("wind_gusts_10m"),
         },
         "risk_scale": ui,
@@ -340,14 +441,21 @@ class WeatherService:
                 "longitude": location["longitude"],
                 "timezone": "Asia/Ho_Chi_Minh",
                 "forecast_days": days,
-                "current": "temperature_2m,precipitation,weather_code,wind_gusts_10m",
+                "current": (
+                    "temperature_2m,apparent_temperature,relative_humidity_2m,"
+                    "precipitation,rain,weather_code,cloud_cover,visibility,"
+                    "wind_speed_10m,wind_direction_10m,wind_gusts_10m"
+                ),
                 "hourly": (
-                    "temperature_2m,relative_humidity_2m,precipitation_probability,"
-                    "precipitation,weather_code,wind_gusts_10m"
+                    "temperature_2m,apparent_temperature,relative_humidity_2m,"
+                    "precipitation_probability,precipitation,weather_code,visibility,"
+                    "wind_speed_10m,wind_direction_10m,wind_gusts_10m"
                 ),
                 "daily": (
                     "weather_code,temperature_2m_max,temperature_2m_min,"
-                    "precipitation_sum,precipitation_probability_max,wind_gusts_10m_max"
+                    "apparent_temperature_max,apparent_temperature_min,"
+                    "precipitation_sum,precipitation_hours,"
+                    "precipitation_probability_max,wind_gusts_10m_max,sunrise,sunset"
                 ),
             },
         )

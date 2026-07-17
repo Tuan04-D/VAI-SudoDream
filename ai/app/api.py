@@ -3,15 +3,21 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any
+from typing import Any, NoReturn
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel, Field
 
-from .agent import AgentConfigurationError, DienBienWeatherAgent
+from .advisory import build_advisory
+from .agent import AgentConfigurationError, AgentResult, DienBienWeatherAgent
 from .config import get_settings
+from .schemas import (
+    AdvisoryRequest,
+    AdvisoryResponse,
+    CompactAdvisoryResponse,
+)
 from .tools.common import DataSourceError
 
 
@@ -50,17 +56,9 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Điện Biên Weather & Landslide AI",
-    version="0.1.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
-
-
-class AdvisoryRequest(BaseModel):
-    commune: str = Field(min_length=2, examples=["Tủa Chùa"])
-    question: str | None = None
-    days: int = Field(default=3, ge=1, le=7)
-    latitude: float | None = None
-    longitude: float | None = None
 
 
 @app.get("/health")
@@ -72,35 +70,107 @@ def health() -> dict[str, Any]:
     }
 
 
-@app.post("/api/v1/advisories")
-def create_advisory(request: AdvisoryRequest) -> dict[str, Any]:
-    try:
-        result = agent.run(
-            commune=request.commune,
-            question=request.question,
-            days=request.days,
-            latitude=request.latitude,
-            longitude=request.longitude,
-        )
-        return {
-            "answer": result.answer,
-            "commune": result.commune,
-            "model": result.model,
-            "tool_trace": result.tool_trace,
-            "source_data": result.source_data,
-        }
-    except AgentConfigurationError as exc:
+def _generate_advisory(
+    request: AdvisoryRequest,
+) -> tuple[AgentResult, dict[str, Any]]:
+    result = agent.run(
+        commune=request.commune,
+        question=request.question,
+        days=request.days,
+        latitude=request.latitude,
+        longitude=request.longitude,
+    )
+    advisory = build_advisory(
+        commune=result.commune,
+        answer=result.answer,
+        source_data=result.source_data,
+    )
+    return result, advisory
+
+
+def _raise_advisory_http_error(exc: Exception) -> NoReturn:
+    if isinstance(exc, AgentConfigurationError):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except (DataSourceError, ValueError) as exc:
+    if isinstance(exc, (DataSourceError, ValueError)):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # Khong ghi exception message cua SDK: mot so provider co the chen
+    # thong tin xac thuc vao message, lam ro ri secret vao log/API response.
+    logger.error("Agent gap loi: %s", type(exc).__name__)
+    raise HTTPException(
+        status_code=502,
+        detail="Agent không gọi được mô hình. Kiểm tra OPENAI_API_KEY và OPENAI_MODEL.",
+    ) from exc
+
+
+def _detail_links(request: AdvisoryRequest, commune: str) -> dict[str, str]:
+    weather_query: dict[str, Any] = {"commune": commune, "days": request.days}
+    if request.latitude is not None and request.longitude is not None:
+        weather_query.update(
+            {"latitude": request.latitude, "longitude": request.longitude}
+        )
+    return {
+        "weather_details": f"/api/v1/weather?{urlencode(weather_query)}",
+        "landslide_details": f"/api/v1/landslides?{urlencode({'commune': commune})}",
+        "debug_full_response": "/api/v1/advisories/debug",
+    }
+
+
+@app.post("/api/v1/advisories", response_model=CompactAdvisoryResponse)
+def create_advisory(request: AdvisoryRequest) -> CompactAdvisoryResponse:
+    """Response gon cho giao dien; khong tra source data va tool trace."""
+    try:
+        result, advisory = _generate_advisory(request)
+        bulletin = advisory["bulletin"]
+        compact_advisory = {
+            key: advisory[key]
+            for key in (
+                "id",
+                "overall_risk",
+                "location",
+                "validity",
+                "current_weather",
+                "daily_forecast",
+                "language_support",
+                "data_sources",
+                "data_quality",
+                "disclaimer",
+            )
+        }
+        compact_advisory["bulletin"] = {
+            "language": bulletin["language"],
+            "title": bulletin["title"],
+            "text": bulletin["llm_text"],
+            "sms_text": bulletin["channel_messages"]["sms"],
+        }
+        return CompactAdvisoryResponse.model_validate(
+            {
+                "schema_version": "1.1",
+                "advisory": compact_advisory,
+                "links": _detail_links(request, result.commune),
+            }
+        )
     except Exception as exc:
-        # Khong ghi exception message cua SDK: mot so provider co the chen
-        # thong tin xac thuc vao message, lam ro ri secret vao log/API response.
-        logger.error("Agent gap loi: %s", type(exc).__name__)
-        raise HTTPException(
-            status_code=502,
-            detail="Agent không gọi được mô hình. Kiểm tra OPENAI_API_KEY và OPENAI_MODEL.",
-        ) from exc
+        _raise_advisory_http_error(exc)
+
+
+@app.post("/api/v1/advisories/debug", response_model=AdvisoryResponse)
+def create_advisory_debug(request: AdvisoryRequest) -> AdvisoryResponse:
+    """Response day du cho phat trien: co du lieu tool va trace cua agent."""
+    try:
+        result, advisory = _generate_advisory(request)
+        return AdvisoryResponse.model_validate(
+            {
+                "schema_version": "1.1",
+                "answer": result.answer,
+                "commune": result.commune,
+                "model": result.model,
+                "advisory": advisory,
+                "tool_trace": result.tool_trace,
+                "source_data": result.source_data,
+            }
+        )
+    except Exception as exc:
+        _raise_advisory_http_error(exc)
 
 
 @app.get("/api/v1/landslides")
