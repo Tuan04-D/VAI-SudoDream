@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import logging
+import tempfile
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Any, NoReturn
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 
 from .advisory import build_advisory
 from .agent import AgentConfigurationError, AgentResult, DienBienWeatherAgent
@@ -19,12 +21,17 @@ from .schemas import (
     CompactAdvisoryResponse,
 )
 from .tools.common import DataSourceError
+from .video_hazard import VideoAnalysisError, VideoHazardAgent
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 settings = get_settings()
 agent = DienBienWeatherAgent(settings=settings)
+video_hazard_agent = VideoHazardAgent(settings=settings)
+
+MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024
+VIDEO_UPLOAD_CHUNK_BYTES = 1024 * 1024
 
 
 def refresh_landslide_cache() -> None:
@@ -100,6 +107,52 @@ def _raise_advisory_http_error(exc: Exception) -> NoReturn:
         status_code=502,
         detail="Agent không gọi được mô hình. Kiểm tra OPENAI_API_KEY và OPENAI_MODEL.",
     ) from exc
+
+
+async def _save_video_upload(video: UploadFile) -> Path:
+    suffix = Path(video.filename or "video").suffix.lower()
+    temporary_file = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    temporary_path = Path(temporary_file.name)
+    bytes_written = 0
+    try:
+        with temporary_file:
+            while chunk := await video.read(VIDEO_UPLOAD_CHUNK_BYTES):
+                bytes_written += len(chunk)
+                if bytes_written > MAX_VIDEO_UPLOAD_BYTES:
+                    raise VideoAnalysisError(
+                        "Video tải lên vượt quá giới hạn 100 MB."
+                    )
+                temporary_file.write(chunk)
+        return temporary_path
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
+
+
+@app.post("/api/v1/video-hazard")
+async def analyze_video_hazard(
+    video: UploadFile = File(...), location: str | None = Form(default=None)
+) -> dict[str, Any]:
+    """Analyze an uploaded short video and return only the hazard-assessment JSON."""
+    temporary_path: Path | None = None
+    try:
+        temporary_path = await _save_video_upload(video)
+        result = video_hazard_agent.analyze(temporary_path, location)
+        return result.assessment
+    except AgentConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except VideoAnalysisError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Video hazard agent gap loi: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=502,
+            detail="Không thể hoàn tất phân tích video. Kiểm tra cấu hình OpenAI.",
+        ) from exc
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        await video.close()
 
 
 def _detail_links(request: AdvisoryRequest, commune: str) -> dict[str, str]:
