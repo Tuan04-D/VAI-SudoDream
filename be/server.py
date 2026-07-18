@@ -12,14 +12,17 @@ can't run locally.
 """
 import asyncio
 import logging
+import tempfile
 from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import communes
 import config
@@ -30,11 +33,20 @@ import llm_notify
 from chat import llm as chat_llm
 from chat.model_client import model_client
 from chat.routers import chat as chat_router, voice as voice_router
+from weather_ai.advisory import build_advisory
+from weather_ai.agent import AgentConfigurationError, WeatherAdvisoryAgent
+from weather_ai.tools.common import DataSourceError
+from weather_ai.video_hazard import VideoAnalysisError, VideoHazardAgent
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
 _log = logging.getLogger("server")
 
 scheduler = AsyncIOScheduler()
+v1_agent = WeatherAdvisoryAgent()
+video_hazard_agent = VideoHazardAgent()
+
+MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024
+VIDEO_UPLOAD_CHUNK_BYTES = 1024 * 1024
 
 
 async def _synthesize_hmong(text: str) -> str | None:
@@ -171,6 +183,12 @@ class ResidentRegisterRequest(BaseModel):
     commune_id: str
 
 
+class AlertSubscriptionRequest(BaseModel):
+    phone: str = Field(min_length=9, max_length=20)
+    address: str = Field(min_length=2, max_length=200)
+    commune_id: str
+
+
 class LoginRequest(BaseModel):
     phone: str
     password: str
@@ -212,6 +230,190 @@ async def health():
         "llm_configured": bool(config.LLM_API_KEY),
         "kaggle_server": kaggle_ok,
     }
+
+
+class V1AdvisoryRequest(BaseModel):
+    commune: str = Field(min_length=2)
+    question: str | None = None
+    days: int = Field(default=3, ge=1, le=7)
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+async def _save_video_upload(video: UploadFile) -> Path:
+    suffix = Path(video.filename or "video").suffix.lower()
+    temporary_file = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    temporary_path = Path(temporary_file.name)
+    bytes_written = 0
+    try:
+        with temporary_file:
+            while chunk := await video.read(VIDEO_UPLOAD_CHUNK_BYTES):
+                bytes_written += len(chunk)
+                if bytes_written > MAX_VIDEO_UPLOAD_BYTES:
+                    raise VideoAnalysisError("Video tải lên vượt quá giới hạn 100 MB.")
+                temporary_file.write(chunk)
+        return temporary_path
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
+
+
+def _raise_v1_advisory_error(exc: Exception) -> None:
+    if isinstance(exc, AgentConfigurationError):
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if isinstance(exc, (DataSourceError, ValueError)):
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _log.error("v1 advisory failed: %s", type(exc).__name__)
+    raise HTTPException(
+        status_code=502,
+        detail="Không gọi được mô hình. Kiểm tra LLM_API_KEY và LLM_MODEL.",
+    ) from exc
+
+
+def _generate_v1_advisory(request: V1AdvisoryRequest) -> tuple[Any, dict[str, Any]]:
+    result = v1_agent.run(
+        commune=request.commune,
+        question=request.question,
+        days=request.days,
+        latitude=request.latitude,
+        longitude=request.longitude,
+    )
+    return result, build_advisory(
+        commune=result.commune,
+        answer=result.answer,
+        source_data=result.source_data,
+    )
+
+
+def _v1_detail_links(request: V1AdvisoryRequest, commune: str) -> dict[str, str]:
+    weather_query: dict[str, Any] = {"commune": commune, "days": request.days}
+    if request.latitude is not None and request.longitude is not None:
+        weather_query.update({"latitude": request.latitude, "longitude": request.longitude})
+    from urllib.parse import urlencode
+
+    return {
+        "weather_details": f"/api/v1/weather?{urlencode(weather_query)}",
+        "landslide_details": f"/api/v1/landslides?{urlencode({'commune': commune})}",
+        "debug_full_response": "/api/v1/advisories/debug",
+    }
+
+
+@app.post("/api/v1/advisories")
+async def create_v1_advisory(request: V1AdvisoryRequest):
+    try:
+        result, advisory = await asyncio.to_thread(_generate_v1_advisory, request)
+        bulletin = advisory["bulletin"]
+        compact_advisory = {
+            key: advisory[key]
+            for key in (
+                "id",
+                "overall_risk",
+                "location",
+                "validity",
+                "current_weather",
+                "daily_forecast",
+                "language_support",
+                "data_sources",
+                "data_quality",
+                "disclaimer",
+            )
+        }
+        compact_advisory["bulletin"] = {
+            "language": bulletin["language"],
+            "title": bulletin["title"],
+            "text": bulletin["llm_text"],
+            "sms_text": bulletin["channel_messages"]["sms"],
+        }
+        return {
+            "schema_version": "1.1",
+            "advisory": compact_advisory,
+            "links": _v1_detail_links(request, result.commune),
+        }
+    except Exception as exc:
+        _raise_v1_advisory_error(exc)
+
+
+@app.post("/api/v1/advisories/debug")
+async def create_v1_advisory_debug(request: V1AdvisoryRequest):
+    try:
+        result, advisory = await asyncio.to_thread(_generate_v1_advisory, request)
+        return {
+            "schema_version": "1.1",
+            "answer": result.answer,
+            "commune": result.commune,
+            "model": result.model,
+            "advisory": advisory,
+            "tool_trace": result.tool_trace,
+            "source_data": result.source_data,
+        }
+    except Exception as exc:
+        _raise_v1_advisory_error(exc)
+
+
+@app.get("/api/v1/landslides")
+async def get_v1_landslides(commune: str = Query(default="")):
+    try:
+        return await asyncio.to_thread(v1_agent.landslide_service.get_warnings, commune)
+    except DataSourceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/landslides/refresh")
+async def refresh_v1_landslides():
+    try:
+        result = await asyncio.to_thread(v1_agent.landslide_service.refresh, True)
+        return {
+            "status": "ok",
+            "records": len(result.get("records", [])),
+            "fetched_at": result.get("fetched_at"),
+            "cache_status": result.get("cache_status"),
+        }
+    except DataSourceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/weather")
+async def get_v1_weather(
+    commune: str,
+    days: int = Query(default=3, ge=1, le=7),
+    latitude: float | None = None,
+    longitude: float | None = None,
+):
+    try:
+        return await asyncio.to_thread(
+            v1_agent.weather_service.get_forecast,
+            commune,
+            days,
+            latitude,
+            longitude,
+        )
+    except (DataSourceError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/video-hazard")
+async def analyze_v1_video_hazard(
+    video: UploadFile = File(...), location: str | None = Form(default=None)
+):
+    temporary_path: Path | None = None
+    try:
+        temporary_path = await _save_video_upload(video)
+        result = await asyncio.to_thread(video_hazard_agent.analyze, temporary_path, location)
+        return result.to_dict()
+    except AgentConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except VideoAnalysisError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        _log.error("v1 video hazard failed: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=502,
+            detail="Không thể hoàn tất phân tích video. Kiểm tra cấu hình LLM.",
+        ) from exc
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        await video.close()
 
 
 @app.post("/tts")
@@ -311,6 +513,26 @@ async def register_resident(request: ResidentRegisterRequest):
     return _public_account(resident)
 
 
+@app.post("/api/residents/subscribe")
+async def subscribe_resident(request: AlertSubscriptionRequest):
+    commune = communes.COMMUNES_BY_ID.get(request.commune_id)
+    if not commune:
+        raise HTTPException(status_code=404, detail="Commune not found")
+
+    phone = "".join(char for char in request.phone.strip() if char.isdigit() or char == "+")
+    digit_count = sum(char.isdigit() for char in phone)
+    if digit_count < 9 or digit_count > 11:
+        raise HTTPException(status_code=422, detail="Số điện thoại không hợp lệ")
+
+    address = request.address.strip()
+    if len(address) < 2:
+        raise HTTPException(status_code=422, detail="Vui lòng nhập bản, thôn hoặc địa chỉ nơi ở")
+
+    lat, lon = geo_utils.random_point_in_commune(request.commune_id, commune["lat"], commune["lon"])
+    resident = db.subscribe_resident(phone, address, request.commune_id, lat, lon)
+    return _public_account(resident)
+
+
 @app.get("/api/residents/{resident_id}")
 async def get_resident(resident_id: str):
     resident = db.get_resident(resident_id)
@@ -371,6 +593,15 @@ async def login_official(request: LoginRequest):
     return _public_account(official)
 
 
+@app.get("/api/officer/residents")
+async def officer_residents(official_id: str):
+    official = db.get_official(official_id)
+    if not official:
+        raise HTTPException(status_code=404, detail="Official not found")
+    residents = db.list_residents_by_commune(official["commune_id"])
+    return [_public_account(resident) for resident in residents]
+
+
 @app.get("/api/chat/history/{resident_id}")
 async def chat_history(resident_id: str):
     if not db.get_resident(resident_id):
@@ -394,10 +625,14 @@ async def trigger_notifications():
 
 @app.post("/api/alerts/{alert_id}/view")
 async def view_alert(alert_id: str, request: AlertViewRequest):
-    if not db.get_alert(alert_id):
+    alert = db.get_alert(alert_id)
+    if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
-    if not db.get_resident(request.resident_id):
+    resident = db.get_resident(request.resident_id)
+    if not resident:
         raise HTTPException(status_code=404, detail="Resident not found")
+    if resident["commune_id"] != alert["commune_id"]:
+        raise HTTPException(status_code=403, detail="Cảnh báo không thuộc xã đã đăng ký")
     db.mark_alert_viewed(request.resident_id, alert_id)
     return {"ok": True}
 
@@ -422,8 +657,12 @@ async def officer_send_alert(commune_id: str, official_id: str | None = None):
     commune = communes.COMMUNES_BY_ID.get(commune_id)
     if not commune:
         raise HTTPException(status_code=404, detail="Commune not found")
-    if official_id and not db.get_official(official_id):
-        raise HTTPException(status_code=404, detail="Official not found")
+    if official_id:
+        official = db.get_official(official_id)
+        if not official:
+            raise HTTPException(status_code=404, detail="Official not found")
+        if official["commune_id"] != commune_id:
+            raise HTTPException(status_code=403, detail="Cán bộ chỉ được quản lý xã đã được phân công")
     detail = await forecast_service.get_commune_forecast(commune_id, 1)
     today = detail["forecast"][0] if detail["forecast"] else None
     risk = today["risk"] if today else detail["overall_risk"]

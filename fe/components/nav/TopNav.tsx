@@ -1,58 +1,92 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
-import { motion } from "motion/react";
-import { OFFICIAL_NAV_ITEMS, OFFICIAL_PRELOGIN_NAV_ITEMS, OFFICIAL_SECTION_IDS, RESIDENT_NAV_ITEMS } from "@/lib/nav";
-import { useActiveSection } from "@/lib/useActiveSection";
+import { IconChevronDown, IconLogout, IconUserCircle, IconUsers } from "@tabler/icons-react";
+import { RESIDENT_NAV_ITEMS } from "@/lib/nav";
 import { useRole } from "@/lib/RoleProvider";
 import NavIcon from "./NavIcon";
 
-export default function TopNav() {
-  const pathname = usePathname();
-  const { official } = useRole();
-  const isOfficialRoute = pathname.startsWith("/quan-ly");
-  const isOfficial = isOfficialRoute && !!official;
-  const items = !isOfficialRoute ? RESIDENT_NAV_ITEMS : official ? OFFICIAL_NAV_ITEMS : OFFICIAL_PRELOGIN_NAV_ITEMS;
-  const activeSection = useActiveSection(isOfficial ? OFFICIAL_SECTION_IDS : []);
-
+function Brand({ href = "/" }: { href?: string }) {
   return (
-    <header className="sticky top-0 z-40 hidden border-b border-border bg-surface/85 backdrop-blur-md lg:block">
-      <div className="mx-auto flex max-w-[1600px] items-center justify-between px-8 py-3.5">
-        <Link href="/" className="flex items-center gap-2.5">
-          <svg viewBox="0 0 64 40" className="h-8 w-12 text-primary" fill="currentColor">
-            <path d="M0 40 14 18l7 8 9-16 12 18 6-8 16 20Z" />
-          </svg>
-          <div className="leading-tight">
-            <p className="font-display text-lg font-extrabold tracking-tight text-primary">Trạm Bản</p>
-          </div>
-        </Link>
+    <Link href={href} className="flex shrink-0 items-center gap-2.5" aria-label="Trạm Bản - Trang chủ">
+      <svg viewBox="0 0 72 44" className="h-8 w-13 text-[#1d4387]" fill="currentColor" aria-hidden>
+        <path opacity=".96" d="M0 41 17 16l8 10L37 6l18 23 6-8 11 20Z" />
+        <path d="m13 41 12-15 7 8 5-7 11 14Z" fill="#fff" opacity=".22" />
+      </svg>
+      <span className="font-display hidden text-xl font-extrabold tracking-[-0.03em] text-[#15366f] sm:inline">Trạm Bản</span>
+    </Link>
+  );
+}
 
+function OfficialHeader() {
+  const router = useRouter();
+  const { official, setOfficial } = useRole();
+  return (
+    <header className="sticky top-0 z-50 border-b border-[#e4eaf3] bg-white/95 shadow-[0_1px_10px_rgba(24,57,111,0.04)] backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-[1920px] items-center px-4 sm:px-6 lg:h-[74px] lg:px-7 2xl:px-9">
+        <Brand href="/quan-ly" />
+
+        <details className="group relative ml-auto">
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-[#e1e7f0] bg-white px-2 py-1.5 transition hover:bg-[#f7f9fc] [&::-webkit-details-marker]:hidden">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#eaf0f8] text-[#6f83a3]">
+              <IconUserCircle className="h-7 w-7" stroke={1.5} />
+            </span>
+            <span className="hidden max-w-40 truncate text-sm font-semibold text-[#203961] sm:block">
+              {official?.display_name ?? "Cán bộ xã"}
+            </span>
+            <IconChevronDown className="h-4 w-4 text-[#71809a] transition group-open:rotate-180" stroke={1.8} />
+          </summary>
+
+          <div className="absolute right-0 top-[calc(100%+8px)] w-64 overflow-hidden rounded-xl border border-[#dfe6f0] bg-white p-1.5 shadow-[0_16px_40px_rgba(29,57,96,.16)]">
+            <div className="border-b border-[#edf0f5] px-3 py-2.5 sm:hidden">
+              <p className="truncate text-sm font-bold text-[#203961]">{official?.display_name ?? "Cán bộ xã"}</p>
+            </div>
+            <Link
+              href="/quan-ly/nguoi-dang-ky"
+              onClick={(event) => event.currentTarget.closest("details")?.removeAttribute("open")}
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-[#344e72] transition hover:bg-[#f1f6ff] hover:text-[#1769e0]"
+            >
+              <IconUsers className="h-5 w-5" stroke={1.8} />
+              Quản lý người đăng ký
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setOfficial(null);
+                router.replace("/quan-ly");
+              }}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-[#a24b4b] transition hover:bg-[#fff4f4]"
+            >
+              <IconLogout className="h-5 w-5" stroke={1.8} />
+              Đăng xuất
+            </button>
+          </div>
+        </details>
+      </div>
+    </header>
+  );
+}
+
+function DefaultHeader() {
+  const pathname = usePathname();
+  return (
+    <header className="sticky top-0 z-40 hidden border-b border-border bg-surface/90 backdrop-blur-md lg:block">
+      <div className="mx-auto flex max-w-[1600px] items-center justify-between px-8 py-3.5">
+        <Brand />
         <nav aria-label="Điều hướng chính" className="flex items-center gap-1">
-          {items.map((item) => {
-            const active =
-              item.kind === "route" ? pathname === item.href : isOfficial && activeSection === item.href.split("#")[1];
+          {RESIDENT_NAV_ITEMS.map((item) => {
+            const active = pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className="group relative flex items-center gap-2 px-4 py-2 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
+                className="relative flex items-center gap-2 px-4 py-2 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
               >
-                {active && (
-                  <motion.span
-                    layoutId="top-nav-active"
-                    className="absolute inset-0 rounded-md bg-primary/10"
-                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                  />
-                )}
-                <NavIcon
-                  name={item.icon}
-                  className={clsx("relative z-10 h-4 w-4", active ? "text-primary" : "")}
-                />
-                <span className={clsx("relative z-10", active && "font-semibold text-primary")}>
-                  {item.label}
-                </span>
+                {active && <span className="absolute inset-0 rounded-md bg-primary/10" />}
+                <NavIcon name={item.icon} className={clsx("relative z-10 h-4 w-4", active && "text-primary")} />
+                <span className={clsx("relative z-10", active && "font-semibold text-primary")}>{item.label}</span>
               </Link>
             );
           })}
@@ -60,4 +94,11 @@ export default function TopNav() {
       </div>
     </header>
   );
+}
+
+export default function TopNav() {
+  const pathname = usePathname();
+  const { official } = useRole();
+  const officialArea = !!official && pathname.startsWith("/quan-ly");
+  return officialArea ? <OfficialHeader /> : <DefaultHeader />;
 }

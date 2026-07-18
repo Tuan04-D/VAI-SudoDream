@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS residents (
     password_salt TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     display_name TEXT NOT NULL,
+    address TEXT NOT NULL DEFAULT '',
     commune_id TEXT NOT NULL,
     lat REAL NOT NULL,
     lon REAL NOT NULL,
@@ -121,6 +122,11 @@ def init_db() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        resident_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(residents)").fetchall()
+        }
+        if "address" not in resident_columns:
+            conn.execute("ALTER TABLE residents ADD COLUMN address TEXT NOT NULL DEFAULT ''")
 
 
 def _row(row: sqlite3.Row | None) -> dict | None:
@@ -137,6 +143,29 @@ def create_resident(phone: str, password: str, display_name: str, commune_id: st
             "INSERT INTO residents (id, phone, password_salt, password_hash, display_name, commune_id, lat, lon, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (rid, phone, salt, pw_hash, display_name, commune_id, lat, lon, now_iso()),
+        )
+    return get_resident(rid)
+
+
+def subscribe_resident(phone: str, address: str, commune_id: str, lat: float, lon: float) -> dict:
+    """Create or update an alert subscription without exposing account credentials."""
+    existing = get_resident_by_phone(phone)
+    if existing:
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE residents SET address = ?, commune_id = ?, lat = ?, lon = ? WHERE id = ?",
+                (address, commune_id, lat, lon, existing["id"]),
+            )
+        return get_resident(existing["id"])
+
+    rid = new_id()
+    salt, pw_hash = hash_password(secrets.token_urlsafe(24))
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO residents "
+            "(id, phone, password_salt, password_hash, display_name, address, commune_id, lat, lon, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (rid, phone, salt, pw_hash, "Người dân", address, commune_id, lat, lon, now_iso()),
         )
     return get_resident(rid)
 
@@ -169,7 +198,10 @@ def update_resident(resident_id: str, display_name: str, commune_id: str, lat: f
 
 def list_residents_by_commune(commune_id: str) -> list[dict]:
     with get_conn() as conn:
-        rows = conn.execute("SELECT * FROM residents WHERE commune_id = ?", (commune_id,)).fetchall()
+        rows = conn.execute(
+            "SELECT * FROM residents WHERE commune_id = ? ORDER BY created_at DESC",
+            (commune_id,),
+        ).fetchall()
     return [dict(r) for r in rows]
 
 

@@ -3,7 +3,16 @@
 Ứng dụng cảnh báo thời tiết nguy hiểm theo từng xã ở Điện Biên (sạt lở, lũ quét, mưa lớn, sương giá, dông, gió mạnh...), cho hai nhóm người dùng:
 
 - **Người dân** — giao diện tối giản, trực quan hóa nguy cơ bằng icon/màu/hành động cụ thể (không bắt đọc số liệu kỹ thuật), âm thanh cảnh báo phân biệt theo loại thiên tai, trợ lý hỏi-đáp bằng giọng nói hoặc văn bản, tiếng Việt hoặc tiếng H'Mông.
-- **Cán bộ xã** — bản đồ rủi ro toàn tỉnh, bản tin AI, theo dõi người dân đã xem cảnh báo hay chưa, tự phát cảnh báo thủ công khi cần.
+- **Cán bộ xã** — bản đồ rủi ro toàn tỉnh, bản tin AI, quản lý người đăng ký theo xã, tự phát cảnh báo thủ công khi cần.
+
+## Cập nhật luồng người dân và cán bộ xã
+
+- Người dân đăng ký nhận cảnh báo bằng **số điện thoại + xã/phường + bản, thôn hoặc địa chỉ nơi ở**, không cần tạo tài khoản hay nhớ mật khẩu. Nếu đăng ký lại cùng số điện thoại, hệ thống cập nhật nơi nhận cảnh báo mới.
+- Người dân vẫn có thể xem dự báo và cảnh báo của các xã khác; nơi đăng ký chỉ quyết định địa bàn nhận cảnh báo và ghi nhận đã xem.
+- Cán bộ xã có thể chọn và xem thời tiết của **mọi xã** trên màn hình tổng quan.
+- Quyền phát cảnh báo và danh sách người đăng ký được giới hạn theo xã của tài khoản cán bộ. API server kiểm tra `official_id` và chỉ trả về người dân thuộc đúng `commune_id` được phân công.
+- Danh sách người đăng ký nằm trong dashboard riêng tại [`/quan-ly/nguoi-dang-ky`](http://localhost:3000/quan-ly/nguoi-dang-ky), không làm dày trang tổng quan. Mở menu từ User Profile Card để vào dashboard hoặc đăng xuất.
+- Mục hồ sơ cũ (`/ho-so`) đã được gỡ khỏi điều hướng và route.
 
 ## 1. Cấu trúc thư mục
 
@@ -32,10 +41,10 @@ Nguồn dữ liệu thật: **Open-Meteo** (dự báo thời tiết), **NCHMF** 
 **Frontend (`fe/`, Next.js App Router)** có 3 route chính:
 
 - `/` — trang người dân. Mặc định hiển thị xã đã đăng ký (hoặc xã mặc định nếu chưa đăng ký), nguy cơ thể hiện bằng icon + màu + hành động cụ thể, có thể chuyển sang xem bản đồ rủi ro toàn tỉnh, âm thanh cảnh báo tổng hợp riêng theo từng loại thiên tai khi có cảnh báo mới trong lúc đang mở trang, trợ lý hỏi đáp dạng cửa sổ nổi góc phải (giọng nói/văn bản).
-- `/quan-ly` — trang cán bộ xã, yêu cầu đăng nhập. Giữ đầy đủ dữ liệu chi tiết (bản đồ nhiệt độ/lượng mưa, bản tin AI, biểu đồ 5 ngày), có thêm bản đồ người dân đã xem cảnh báo (chấm xanh = đã xem, chấm đỏ = chưa xem) chọn được theo từng đợt cảnh báo, và nút tự phát cảnh báo thủ công.
-- `/ho-so` — hồ sơ cá nhân, hiển thị đúng theo vai trò đang đăng nhập (người dân hoặc cán bộ).
+- `/quan-ly` — trang cán bộ xã, yêu cầu đăng nhập. Có bộ chọn để xem dự báo mọi xã; chỉ xã được phân công mới có thể phát cảnh báo.
+- `/quan-ly/nguoi-dang-ky` — dashboard quản lý số điện thoại và địa chỉ người dân đã đăng ký trong xã của cán bộ hiện tại.
 
-Đăng nhập/đăng ký hiện chỉ ở mức số điện thoại + mật khẩu thật (đã băm), **chưa có OTP/JWT/session/rate-limit** — đủ cho demo, cần làm thêm nếu triển khai thật. Vai trò người dân/cán bộ chỉ phân biệt ở giao diện, không có kiểm tra quyền phía server.
+Đăng nhập cán bộ hiện chỉ ở mức số điện thoại + mật khẩu thật (đã băm), **chưa có OTP/JWT/session/rate-limit** — đủ cho demo, cần làm thêm nếu triển khai thật. Việc giới hạn xã cho các API quản lý đã được kiểm tra phía server; không nên dùng cơ chế localStorage hiện tại cho môi trường production.
 
 ## 3. Chức năng hiện có
 
@@ -44,13 +53,14 @@ Nguồn dữ liệu thật: **Open-Meteo** (dự báo thời tiết), **NCHMF** 
 - Trực quan hóa nguy cơ bằng icon/màu/hành động cụ thể — không bắt phải đọc số liệu.
 - Nghe cảnh báo bằng âm thanh tổng hợp, phân biệt theo loại thiên tai (sạt lở, lũ quét, dông, gió, sương giá...).
 - Hỏi đáp bằng giọng nói hoặc văn bản, tiếng Việt hoặc tiếng H'Mông; lưu lịch sử hội thoại nếu đã đăng nhập, xem lại được.
-- Đăng ký/đăng nhập bằng số điện thoại + mật khẩu (không bắt buộc để xem thông tin cơ bản).
+- Đăng ký nhận cảnh báo bằng số điện thoại và nơi ở, không cần tạo tài khoản.
 - Xem bản đồ rủi ro toàn tỉnh.
 
 **Cán bộ xã**
 - Đăng nhập theo xã mình quản lý.
+- Xem dự báo của mọi xã nhưng chỉ phát cảnh báo và quản lý người đăng ký trong xã được phân công.
 - Xem bản đồ nhiệt độ/lượng mưa chi tiết, bản tin AI, biểu đồ dự báo 5 ngày.
-- Xem bản đồ người dân đã xem cảnh báo theo từng đợt cảnh báo đã phát.
+- Mở dashboard riêng để xem số điện thoại, địa chỉ và ngày đăng ký của người dân trong xã.
 - Tự phát cảnh báo thủ công cho xã mình, kể cả khi mức rủi ro chưa đạt ngưỡng tự động.
 - Xem/nghe danh sách thông báo đã phát (tự động và thủ công).
 
@@ -60,7 +70,7 @@ SQLite, file `be/data/trambaen.db` — **tự khởi tạo** (tạo file + bản
 
 | Bảng | Nội dung |
 |---|---|
-| `residents` | Người dân: số điện thoại (duy nhất), mật khẩu đã băm, tên, xã, toạ độ mô phỏng |
+| `residents` | Người đăng ký cảnh báo: số điện thoại (duy nhất), địa chỉ, xã, toạ độ mô phỏng; trường mật khẩu cũ vẫn được giữ để tương thích dữ liệu demo |
 | `officials` | Cán bộ xã: số điện thoại, mật khẩu đã băm, tên, xã quản lý |
 | `chat_messages` | Lịch sử hội thoại văn bản (chỉ lưu khi người dân đã đăng nhập) |
 | `alerts` | Mỗi lần phát cảnh báo (tự động hoặc do cán bộ phát), mức rủi ro, loại thiên tai, nội dung, trạng thái |
@@ -125,7 +135,7 @@ Mở `http://localhost:3000`.
 
 ## 9. Giới hạn đã biết
 
-- Đăng nhập/đăng ký chỉ ở mức giao diện, mật khẩu có băm nhưng chưa có OTP, JWT/session thật, hay rate-limit/khoá tài khoản — phù hợp demo, cần làm lại phần xác thực nếu triển khai thật.
+- Đăng nhập cán bộ vẫn là cơ chế demo: mật khẩu có băm nhưng chưa có OTP, JWT/session thật, hay rate-limit/khoá tài khoản — cần làm lại phần xác thực nếu triển khai thật.
 - Bản đồ chỉ có 2 mức phóng: xã và toàn tỉnh — chưa có ranh giới cấp thôn/bản (không có nguồn public đủ chi tiết).
 - TTS tiếng H'Mông chạy qua Kaggle Notebook, không phải service luôn sẵn sàng — có thể lỗi ngẫu nhiên; hệ thống tự hiện "đang chuẩn bị" thay vì crash khi việc này xảy ra.
 - Chưa tích hợp Zalo/SMS thật — kênh phân phối cảnh báo hiện tại chỉ có web.

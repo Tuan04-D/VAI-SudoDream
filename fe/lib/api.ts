@@ -82,6 +82,14 @@ export function registerResident(
   });
 }
 
+export function subscribeResident(phone: string, address: string, communeId: string): Promise<Resident> {
+  return postJson(`${API_BASE}/api/residents/subscribe`, {
+    phone,
+    address,
+    commune_id: communeId,
+  });
+}
+
 export function loginResident(phone: string, password: string): Promise<Resident> {
   return postJson(`${API_BASE}/api/residents/login`, { phone, password });
 }
@@ -134,6 +142,11 @@ export function markAlertViewed(alertId: string, residentId: string): Promise<{ 
 
 export function fetchOfficerAlerts(communeId: string): Promise<NotificationItem[]> {
   return getJson(`${API_BASE}/api/officer/alerts?commune_id=${communeId}`);
+}
+
+export function fetchOfficerResidents(officialId: string): Promise<Resident[]> {
+  const params = new URLSearchParams({ official_id: officialId });
+  return getJson(`${API_BASE}/api/officer/residents?${params.toString()}`);
 }
 
 export function fetchViewedMap(alertId: string): Promise<ViewedMapResponse> {
