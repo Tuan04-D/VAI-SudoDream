@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import clsx from "clsx";
-import { CHATBOT_API_BASE } from "@/lib/api";
+import { IconPlayerPauseFilled, IconPlayerPlayFilled } from "@tabler/icons-react";
+import { API_BASE } from "@/lib/api";
 import type { Language } from "@/lib/types";
 
 export default function SpeakButton({
@@ -26,7 +27,7 @@ export default function SpeakButton({
     if (!text.trim()) return;
     setStatus("loading");
     try {
-      const res = await fetch(`${CHATBOT_API_BASE}/tts`, {
+      const res = await fetch(`${API_BASE}/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, language }),
@@ -60,17 +61,12 @@ export default function SpeakButton({
         "Không phát được, thử lại"
       ) : status === "playing" ? (
         <>
-          <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
-            <rect x="6" y="5" width="4" height="14" rx="1" />
-            <rect x="14" y="5" width="4" height="14" rx="1" />
-          </svg>
+          <IconPlayerPauseFilled className="h-3.5 w-3.5" />
           Dừng
         </>
       ) : (
         <>
-          <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
-            <path d="M8 5v14l11-7Z" />
-          </svg>
+          <IconPlayerPlayFilled className="h-3.5 w-3.5" />
           Nghe
         </>
       )}

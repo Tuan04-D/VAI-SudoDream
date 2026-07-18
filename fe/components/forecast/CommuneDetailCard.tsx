@@ -1,19 +1,18 @@
 "use client";
 
 import { motion, AnimatePresence } from "motion/react";
-import HazardIcon from "@/components/ui/HazardIcon";
-import SpeakButton from "@/components/ui/SpeakButton";
-import { RISK_BG_CLASS, RISK_LABEL } from "@/lib/risk";
-import type { Commune, ForecastDay } from "@/lib/types";
+import { IconSunrise, IconSunset } from "@tabler/icons-react";
+import WeatherIcon, { FlashFloodIcon, LandslideIcon } from "@/components/ui/WeatherIcon";
+import RiskChip from "@/components/ui/RiskChip";
+import DayStatGrid from "./DayStatGrid";
+import type { Commune, DayForecast } from "@/lib/types";
 
 export default function CommuneDetailCard({
   commune,
   day,
-  warningText,
 }: {
   commune: Commune;
-  day: ForecastDay;
-  warningText?: string;
+  day: DayForecast;
 }) {
   return (
     <AnimatePresence mode="wait">
@@ -23,48 +22,55 @@ export default function CommuneDetailCard({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.25 }}
-        className="rounded-lg border border-border bg-surface p-4"
+        className="card p-4"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-              {commune.name} · {day.date}
+              {commune.name} · {day.day_index === 0 ? "Hôm nay" : day.date}
             </p>
             <div className="mt-1 flex items-center gap-2">
-              <HazardIcon type={day.hazard_type} className="h-6 w-6 text-primary" />
-              <span className="font-display text-lg font-bold">{day.hazard_label}</span>
+              <WeatherIcon iconKey={day.icon_key} className="h-6 w-6 text-primary" />
+              <span className="font-display text-lg font-bold">{day.condition ?? "—"}</span>
             </div>
           </div>
-          <span
-            className={`shrink-0 rounded-sm ${RISK_BG_CLASS[day.risk_level]} px-3 py-1 text-xs font-bold text-white`}
-          >
-            {RISK_LABEL[day.risk_level]}
-          </span>
+          <RiskChip risk={day.risk} className="shrink-0" />
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-          <Stat label="Nhiệt độ" value={`${day.temp_downscaled}°C`} />
-          <Stat label="Lượng mưa" value={`${day.precip_downscaled}mm`} />
-          <Stat label="Độ tin cậy" value={`${Math.round(day.confidence * 100)}%`} />
+        <div className="mt-4">
+          <DayStatGrid day={day} />
         </div>
 
-        <p className="mt-4 text-sm leading-relaxed text-ink">
-          {warningText || day.recommended_action}
-        </p>
+        {(day.sunrise || day.sunset) && (
+          <div className="mt-3 flex items-center gap-4 border-t border-border pt-3 text-xs text-ink-muted">
+            {day.sunrise && (
+              <span className="inline-flex items-center gap-1.5">
+                <IconSunrise className="h-4 w-4" stroke={2} /> Mọc {day.sunrise.slice(11, 16)}
+              </span>
+            )}
+            {day.sunset && (
+              <span className="inline-flex items-center gap-1.5">
+                <IconSunset className="h-4 w-4" stroke={2} /> Lặn {day.sunset.slice(11, 16)}
+              </span>
+            )}
+          </div>
+        )}
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          <SpeakButton text={warningText || day.recommended_action} language="vietnamese" />
-        </div>
+        {(day.landslide || day.flash_flood) && (
+          <div className="mt-4 flex flex-col gap-1.5 border-t border-border pt-3">
+            {day.landslide && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-risk-3">
+                <LandslideIcon className="h-3.5 w-3.5" /> Nguy cơ sạt lở đất (cảnh báo NCHMF)
+              </span>
+            )}
+            {day.flash_flood && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-risk-3">
+                <FlashFloodIcon className="h-3.5 w-3.5" /> Nguy cơ lũ quét (cảnh báo NCHMF)
+              </span>
+            )}
+          </div>
+        )}
       </motion.div>
     </AnimatePresence>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md bg-surface-muted py-2.5 transition-colors hover:bg-primary/10">
-      <p className="font-data text-base font-semibold text-ink">{value}</p>
-      <p className="text-[11px] text-ink-muted">{label}</p>
-    </div>
   );
 }

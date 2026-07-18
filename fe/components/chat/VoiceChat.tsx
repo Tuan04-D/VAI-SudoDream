@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { motion } from "motion/react";
+import { IconMicrophone } from "@tabler/icons-react";
 import { ConvoSocket } from "@/lib/audio/convoSocket";
 import { VADSession } from "@/lib/audio/vad";
-import { CHATBOT_API_BASE } from "@/lib/api";
+import { API_BASE } from "@/lib/api";
 import type { ChatContext, Language } from "@/lib/types";
 
 type ConvoState = "idle" | "listening" | "recording" | "processing" | "speaking";
@@ -99,7 +100,7 @@ export default function VoiceChat({
         }
       };
 
-      await socket.open(CHATBOT_API_BASE, language, context);
+      await socket.open(API_BASE, language, context);
 
       const vad = new VADSession({ threshold: 0.015, silenceMs: 800, minSpeechMs: 500 });
       vadRef.current = vad;
@@ -148,7 +149,7 @@ export default function VoiceChat({
 
   return (
     <div className="flex flex-col items-center gap-4 py-6">
-      {errorMsg && <p className="text-sm text-risk-nguyhiem">{errorMsg}</p>}
+      {errorMsg && <p className="text-sm text-risk-3">{errorMsg}</p>}
 
       <motion.button
         type="button"
@@ -180,7 +181,7 @@ export default function VoiceChat({
           animate={{ scale: state === "recording" ? ringScale : 1 }}
           transition={{ duration: 0.1 }}
         />
-        <MicIcon className="relative h-10 w-10" />
+        <IconMicrophone className="relative h-10 w-10" stroke={1.8} />
       </motion.button>
 
       <p className="text-sm font-medium text-ink-muted">
@@ -197,21 +198,3 @@ export default function VoiceChat({
   );
 }
 
-function MicIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-      <line x1="12" y1="19" x2="12" y2="23" />
-      <line x1="8" y1="23" x2="16" y2="23" />
-    </svg>
-  );
-}

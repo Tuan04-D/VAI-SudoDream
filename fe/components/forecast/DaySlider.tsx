@@ -2,30 +2,29 @@
 
 import clsx from "clsx";
 import { motion } from "motion/react";
-import { RISK_COLOR_VAR } from "@/lib/risk";
-import type { ForecastDay } from "@/lib/types";
+import type { DayForecast } from "@/lib/types";
 
 export default function DaySlider({
   days,
   selected,
   onSelect,
 }: {
-  days: ForecastDay[];
+  days: DayForecast[];
   selected: number;
   onSelect: (day: number) => void;
 }) {
-  const stops = days.map((d) => RISK_COLOR_VAR[d.risk_level]).join(", ");
+  const stops = days.map((d) => d.risk.color).join(", ");
   const trackStyle = { background: `linear-gradient(90deg, ${stops})` };
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-4">
+    <div className="card p-4">
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted">
         Kéo để xem các ngày tới
       </p>
       <input
         type="range"
-        min={1}
-        max={days.length || 5}
+        min={0}
+        max={(days.length || 5) - 1}
         step={1}
         value={selected}
         onChange={(e) => onSelect(Number(e.target.value))}
@@ -52,14 +51,14 @@ export default function DaySlider({
               )}
               <span
                 className="relative z-10 h-2 w-2 rounded-full"
-                style={{ backgroundColor: RISK_COLOR_VAR[d.risk_level] }}
+                style={{ backgroundColor: d.risk.color }}
                 aria-hidden
               />
               <span className={clsx("relative z-10", active ? "font-semibold text-primary" : "text-ink-muted")}>
-                {d.day_index === 1 ? "Mai" : `+${d.day_index - 1}d`}
+                {d.day_index === 0 ? "Hôm nay" : d.day_index === 1 ? "Mai" : `+${d.day_index}d`}
               </span>
               <span className="relative z-10 font-data text-[10px] text-ink-muted">
-                {d.date.slice(0, 5)}
+                {d.date?.slice(5) ?? ""}
               </span>
             </button>
           );
