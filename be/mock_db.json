@@ -1,0 +1,45 @@
+{
+  "note": "Local test accounts, seeded via the real /api/residents/register and /api/officials/register endpoints (src/backend/data/trambaen.db). Passwords here are plaintext for convenience — the DB only stores a salted PBKDF2 hash of each. Do not reuse these passwords for anything real.",
+  "commune": {
+    "id": "19571213",
+    "name": "Xã Mường Phăng"
+  },
+  "residents": [
+    {
+      "id": "ebba7ab04faa456a",
+      "phone": "0397856773",
+      "password": "resident123",
+      "display_name": "Lò Thị Súa",
+      "commune_id": "19571213",
+      "lat": 21.463479924304828,
+      "lon": 103.138199165339
+    },
+    {
+      "id": "b6c4709e899d4d1f",
+      "phone": "0397856774",
+      "password": "resident123",
+      "display_name": "Giàng A Dính",
+      "commune_id": "19571213",
+      "lat": 21.48447074667734,
+      "lon": 103.11087944590581
+    },
+    {
+      "id": "bf3e43871d074760",
+      "phone": "0397856775",
+      "password": "resident123",
+      "display_name": "Vàng Thị Mai",
+      "commune_id": "19571213",
+      "lat": 21.42623133172989,
+      "lon": 103.1448645103584
+    }
+  ],
+  "officials": [
+    {
+      "id": "4bd66c5de4cc4fa7",
+      "phone": "0397856780",
+      "password": "official123",
+      "display_name": "Cà Văn Hòa",
+      "commune_id": "19571213"
+    }
+  ]
+}

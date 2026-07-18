@@ -1,0 +1,235 @@
+@import "tailwindcss";
+
+/*
+  Trạm Bản design tokens.
+  Palette: "chàm" indigo (traditional Thái/Mông indigo-dyed cloth) as the
+  primary, harvest ochre as accent, cool mist-paper background. Single
+  light theme by design — this is an outdoor-glance safety tool read on
+  phones in daylight, not a dashboard meant to be dark-mode-cozy.
+  Risk colors (level 0-3, green/amber/orange/red) are reserved for risk
+  indicators only, and match the real AI service's own RiskScale colors
+  exactly so a value looks the same everywhere it appears.
+
+  Signature motif: topographic contour lines (--pattern-contour) — the whole
+  product thesis is terrain-aware forecasting, so elevation-line texture is
+  the one recurring decorative device, used sparingly on hero surfaces.
+
+  Radius is deliberately tight and mostly-square — sharp data cards read as
+  a real instrument panel, not a generic rounded AI mockup. chip/badge
+  (--radius-sm), control/input (--radius-md), card (--radius-lg, still <1rem).
+*/
+:root {
+  --color-bg: #eef0e8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #e4e7dc;
+  --color-ink: #1b2333;
+  --color-ink-muted: #5b6478;
+  --color-border: #d7dbcd;
+
+  --color-primary: #2f4b8c;
+  --color-primary-dark: #1f3567;
+  --color-primary-ink: #ffffff;
+
+  --color-accent: #c98a2e;
+  --color-accent-ink: #2a1c05;
+
+  /* Exact hex values the real AI service (fe/ai) returns for its 0-3 risk
+     scale — kept identical so a risk chip looks the same whether its color
+     came from the API directly or from one of our own Tailwind utilities. */
+  --color-risk-0: #2e7d32;
+  --color-risk-1: #f9a825;
+  --color-risk-2: #ef6c00;
+  --color-risk-3: #c62828;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+}
+
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-muted: var(--color-surface-muted);
+  --color-ink: var(--color-ink);
+  --color-ink-muted: var(--color-ink-muted);
+  --color-border: var(--color-border);
+
+  --color-primary: var(--color-primary);
+  --color-primary-dark: var(--color-primary-dark);
+  --color-primary-ink: var(--color-primary-ink);
+
+  --color-accent: var(--color-accent);
+  --color-accent-ink: var(--color-accent-ink);
+
+  --color-risk-0: var(--color-risk-0);
+  --color-risk-1: var(--color-risk-1);
+  --color-risk-2: var(--color-risk-2);
+  --color-risk-3: var(--color-risk-3);
+
+  --font-display: var(--font-be-vietnam-pro);
+  --font-body: var(--font-be-vietnam-pro);
+  --font-data: var(--font-jetbrains-mono);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+}
+
+html {
+  color-scheme: light;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Topographic contour-line texture — the app's one recurring decorative motif */
+.bg-contour {
+  background-image: repeating-radial-gradient(
+    circle at 18% 24%,
+    color-mix(in srgb, var(--color-primary) 14%, transparent) 0px,
+    transparent 1.5px,
+    transparent 15px,
+    color-mix(in srgb, var(--color-primary) 9%, transparent) 16px,
+    transparent 17px,
+    transparent 34px
+  );
+}
+
+.bg-contour-light {
+  background-image: repeating-radial-gradient(
+    circle at 82% 12%,
+    color-mix(in srgb, var(--color-primary-ink) 22%, transparent) 0px,
+    transparent 1.5px,
+    transparent 13px,
+    color-mix(in srgb, var(--color-primary-ink) 12%, transparent) 14px,
+    transparent 15px,
+    transparent 30px
+  );
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Elevation system — replaces the flat `border border-border` look used
+   everywhere with real depth (a soft shadow + a hairline ring instead of a
+   hard border). One shared class so every panel in the app reads as the
+   same system rather than assorted ad hoc boxes. */
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px rgba(27, 35, 51, 0.05), 0 2px 8px rgba(27, 35, 51, 0.06),
+    0 0 0 1px rgba(27, 35, 51, 0.045);
+}
+
+.card-raised {
+  box-shadow: 0 2px 4px rgba(27, 35, 51, 0.06), 0 8px 20px rgba(27, 35, 51, 0.1),
+    0 0 0 1px rgba(27, 35, 51, 0.05);
+}
+
+/* GOV.UK-style notice: colored left bar + icon on a light surface, not a
+   full-bleed color block — reads as an official notice rather than an
+   alert-fatigue banner. Border color is set per-instance (risk color) via
+   inline style/Tailwind arbitrary value at the call site. */
+.notice {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  border-left-width: 4px;
+  border-left-style: solid;
+  box-shadow: 0 1px 2px rgba(27, 35, 51, 0.05), 0 2px 8px rgba(27, 35, 51, 0.06),
+    0 0 0 1px rgba(27, 35, 51, 0.045);
+}
+
+/* Custom range slider used by DaySlider — track color is set inline per instance */
+.risk-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  outline: none;
+}
+.risk-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  width: 22px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  border: 3px solid var(--color-surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.risk-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
+.risk-slider::-moz-range-thumb {
+  height: 22px;
+  width: 22px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  border: 3px solid var(--color-surface);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@keyframes hazard-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0; transform: scale(1.6); }
+}
+
+.hazard-pulse {
+  animation: hazard-pulse 1.8s ease-out infinite;
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-muted) 25%,
+    color-mix(in srgb, var(--color-surface-muted) 50%, white) 37%,
+    var(--color-surface-muted) 63%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.forecast-map-popup .maplibregl-popup-content {
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  box-shadow: 0 4px 14px rgba(27, 35, 51, 0.18);
+}
+.forecast-map-popup .maplibregl-popup-tip {
+  border-top-color: var(--color-surface);
+  border-bottom-color: var(--color-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
