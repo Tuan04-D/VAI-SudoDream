@@ -1,6 +1,8 @@
 APScheduler>=3.11,<4
 fastapi>=0.116,<1
 openai>=2.0,<3
+opencv-python-headless>=4.10,<5
 python-dotenv>=1.1,<2
+python-multipart>=0.0.20,<1
 uvicorn[standard]>=0.35,<1
 
