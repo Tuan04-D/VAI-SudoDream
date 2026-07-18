@@ -270,6 +270,44 @@ async def get_forecast(commune_id: str, days: int = config.FORECAST_DAYS):
     return await forecast_service.get_commune_forecast(commune_id, days)
 
 
+@app.get("/api/forecast/{commune_id}/heatmap")
+async def get_forecast_heatmap(commune_id: str, variable: str = "temperature", day: int = 0):
+    if commune_id not in communes.COMMUNES_BY_ID:
+        raise HTTPException(status_code=404, detail="Commune not found")
+    if variable not in ("temperature", "precipitation"):
+        raise HTTPException(status_code=422, detail="variable phải là 'temperature' hoặc 'precipitation'")
+    day = max(0, min(day, config.FORECAST_DAYS - 1))
+    heatmap = forecast_service.get_commune_heatmap(commune_id, variable, day)
+    if heatmap is None:
+        raise HTTPException(status_code=503, detail="Chưa có dữ liệu thời tiết/địa hình cho xã này, thử lại sau ít phút.")
+    return heatmap
+
+
+@app.get("/api/communes/{commune_id}/random-point")
+async def get_commune_random_point(commune_id: str):
+    """Simulates a resident's GPS fix — a random point inside the commune's
+    real polygon boundary, standing in for a real phone GPS reading."""
+    commune = communes.COMMUNES_BY_ID.get(commune_id)
+    if not commune:
+        raise HTTPException(status_code=404, detail="Commune not found")
+    lat, lon = geo_utils.random_point_in_commune(commune_id, commune["lat"], commune["lon"])
+    return {"commune_id": commune_id, "lat": lat, "lon": lon}
+
+
+@app.get("/api/point-forecast")
+async def get_point_forecast(commune_id: str, lat: float, lon: float, day: int = 0):
+    """Terrain-corrected forecast at an arbitrary point inside a commune —
+    used for a resident's simulated GPS location, not tied to a saved
+    resident record (see /api/residents/{id}/point-temperature for that)."""
+    if commune_id not in communes.COMMUNES_BY_ID:
+        raise HTTPException(status_code=404, detail="Commune not found")
+    day = max(0, min(day, config.FORECAST_DAYS - 1))
+    result = forecast_service.get_point_forecast(commune_id, lat, lon, day)
+    if result is None:
+        raise HTTPException(status_code=503, detail="Chưa có dữ liệu thời tiết/địa hình cho xã này, thử lại sau ít phút.")
+    return result
+
+
 @app.get("/api/risk/{commune_id}")
 async def get_risk(commune_id: str):
     if commune_id not in communes.COMMUNES_BY_ID:
@@ -317,6 +355,17 @@ async def get_resident(resident_id: str):
     if not resident:
         raise HTTPException(status_code=404, detail="Resident not found")
     return _public_account(resident)
+
+
+@app.get("/api/residents/{resident_id}/point-temperature")
+async def get_resident_point_temperature(resident_id: str):
+    resident = db.get_resident(resident_id)
+    if not resident:
+        raise HTTPException(status_code=404, detail="Resident not found")
+    result = forecast_service.get_point_forecast(resident["commune_id"], resident["lat"], resident["lon"])
+    if result is None:
+        raise HTTPException(status_code=503, detail="Chưa có dữ liệu thời tiết/địa hình cho xã này, thử lại sau ít phút.")
+    return result
 
 
 @app.post("/api/residents/login")

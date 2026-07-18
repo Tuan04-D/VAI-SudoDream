@@ -22,8 +22,10 @@ from datetime import date, datetime, timedelta
 
 import communes
 import config
+import terrain
 from weather_ai.advisory import RISK_TITLES, build_advisory
 from weather_ai.agent import AgentConfigurationError, WeatherAdvisoryAgent
+from weather_ai.terrain_correction import corrected_temperature
 from weather_ai.tools.common import DataSourceError
 
 _log = logging.getLogger(__name__)
@@ -225,6 +227,7 @@ def _build_day_entry(
         "landslide": landslide,
         "flash_flood": flash_flood,
         "hazards": hazards,
+        "confidence": day.get("confidence"),
     }
 
 
@@ -251,6 +254,120 @@ async def get_map_day(day_index: int) -> list[dict]:
         record = _find_landslide_record(lookup, commune["name"])
         out.append(_build_day_entry(commune, daily[day_index], day_index, record, requested_time, window_hours))
     return out
+
+
+def _day_reference_temperature(weather: dict, day_index: int) -> float | None:
+    """Day 0 uses the live 'current' reading; day 1+ has no live reading yet,
+    so falls back to that day's forecast mean (temp_min + temp_max) / 2."""
+    forecast = weather.get("forecast", {})
+    if day_index == 0:
+        current_temp = forecast.get("current", {}).get("temperature_c")
+        if current_temp is not None:
+            return current_temp
+    daily = forecast.get("daily", [])
+    if day_index >= len(daily):
+        return None
+    day = daily[day_index]
+    temp_min, temp_max = day.get("temperature_min_c"), day.get("temperature_max_c")
+    if temp_min is None or temp_max is None:
+        return None
+    return (temp_min + temp_max) / 2
+
+
+def _day_reference_precip(weather: dict, day_index: int) -> float | None:
+    daily = weather.get("forecast", {}).get("daily", [])
+    if day_index >= len(daily):
+        return None
+    return daily[day_index].get("rain_sum_mm")
+
+
+def get_commune_heatmap(commune_id: str, variable: str = "temperature", day_index: int = 0) -> dict | None:
+    """Grid of points inside the commune for the requested day
+    (weather_ai/terrain_correction.py):
+    - "temperature": terrain-corrected — each point re-expressed at its own
+      elevation instead of only the centroid's (real per-point variation).
+    - "precipitation": NOT terrain-corrected — a trained elevation model for
+      rain measured WORSE than raw on held-out communes (see
+      scripts/train_terrain_correction.py results), so shipping a "corrected"
+      rain value would be a fabricated precision claim. Every point in the
+      commune gets the same commune-level Open-Meteo figure; still useful to
+      see on the province map, just flagged as uncorrected via `corrected`.
+    None if weather isn't cached yet or the commune has no terrain grid."""
+    weather = _weather_cache.get(commune_id, config.WEATHER_CACHE_MINUTES * 60)
+    if weather is None:
+        return None
+    reference_elevation = terrain.centroid_elevation(commune_id)
+    grid = terrain.grid_points(commune_id)
+    if reference_elevation is None or not grid:
+        return None
+
+    if variable == "precipitation":
+        reference_value = _day_reference_precip(weather, day_index)
+        if reference_value is None:
+            return None
+        points = [
+            {"lat": point["lat"], "lon": point["lon"], "elevation_m": point["elevation_m"], "value": reference_value}
+            for point in grid
+        ]
+        corrected = False
+        unit = "mm"
+    else:
+        reference_value = _day_reference_temperature(weather, day_index)
+        if reference_value is None:
+            return None
+        month = datetime.now().month
+        points = [
+            {
+                "lat": point["lat"],
+                "lon": point["lon"],
+                "elevation_m": point["elevation_m"],
+                "value": corrected_temperature(reference_value, point["elevation_m"], reference_elevation, month),
+            }
+            for point in grid
+        ]
+        corrected = True
+        unit = "°C"
+
+    return {
+        "commune_id": commune_id,
+        "variable": variable,
+        "day_index": day_index,
+        "corrected": corrected,
+        "unit": unit,
+        "reference_value": reference_value,
+        "reference_elevation_m": reference_elevation,
+        "generated_at": weather.get("forecast", {}).get("current", {}).get("time"),
+        "points": points,
+    }
+
+
+def get_point_forecast(commune_id: str, lat: float, lon: float, day_index: int = 0) -> dict | None:
+    """Terrain-corrected temperature at an arbitrary point inside a commune
+    (resident's registered coordinate or a simulated GPS fix) — snaps to the
+    nearest precomputed grid point's elevation instead of calling the
+    Elevation API live on the request path. Precipitation is intentionally
+    not point-corrected here either, for the same reason as the heatmap."""
+    weather = _weather_cache.get(commune_id, config.WEATHER_CACHE_MINUTES * 60)
+    if weather is None:
+        return None
+    reference_elevation = terrain.centroid_elevation(commune_id)
+    reference_temp = _day_reference_temperature(weather, day_index)
+    reference_precip = _day_reference_precip(weather, day_index)
+    if reference_elevation is None or reference_temp is None:
+        return None
+    grid = terrain.grid_points(commune_id)
+    point_elevation = reference_elevation
+    if grid:
+        nearest = min(grid, key=lambda point: (point["lat"] - lat) ** 2 + (point["lon"] - lon) ** 2)
+        point_elevation = nearest["elevation_m"]
+    month = datetime.now().month
+    return {
+        "day_index": day_index,
+        "temperature_c": corrected_temperature(reference_temp, point_elevation, reference_elevation, month),
+        "elevation_m": point_elevation,
+        "reference_temperature_c": reference_temp,
+        "rain_sum_mm": reference_precip,
+    }
 
 
 async def get_commune_forecast(commune_id: str, days: int = config.FORECAST_DAYS) -> dict:
@@ -306,6 +423,7 @@ def _from_advisory(commune: dict, payload: dict) -> dict:
             "landslide": day.get("landslide"),
             "flash_flood": day.get("flash_flood"),
             "hazards": _day_hazard_tags(day),
+            "confidence": day.get("confidence"),
         }
         for index, day in enumerate(payload.get("daily_forecast", []))
     ]
@@ -430,9 +548,12 @@ async def _fallback_forecast(commune: dict, days: int) -> dict:
     }
 
 
-async def warm_caches(days: int = config.FORECAST_DAYS, concurrency: int = 8) -> None:
+async def warm_caches(days: int = config.FORECAST_DAYS, concurrency: int = 4) -> None:
     """Refreshes the landslide snapshot and every commune's weather. Cheap
-    (no LLM); safe to run on a timer. Does NOT touch the advisory cache."""
+    (no LLM); safe to run on a timer. Does NOT touch the advisory cache.
+    concurrency halved from 8: each commune now fires 2 Open-Meteo calls
+    (main forecast + ensemble confidence) instead of 1, so the old value
+    doubled peak burst rate and could trip Open-Meteo's rate limiter."""
     try:
         await _get_landslide_snapshot()
     except DataSourceError as exc:

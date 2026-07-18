@@ -6,7 +6,9 @@ import type {
   ForecastMapResponse,
   NotificationItem,
   Official,
+  PointTemperature,
   Resident,
+  TerrainHeatmap,
   ViewedMapResponse,
   WarningResponse,
 } from "./types";
@@ -52,6 +54,32 @@ export function fetchForecastMap(day: number): Promise<ForecastMapResponse> {
 
 export function fetchWarning(communeId: string): Promise<WarningResponse> {
   return getJson(`${API_BASE}/api/warnings/${communeId}/latest`);
+}
+
+export function fetchCommuneHeatmap(
+  communeId: string,
+  variable: "temperature" | "precipitation" = "temperature",
+  day = 0
+): Promise<TerrainHeatmap> {
+  return getJson(`${API_BASE}/api/forecast/${communeId}/heatmap?variable=${variable}&day=${day}`);
+}
+
+export function fetchResidentPointTemperature(residentId: string): Promise<PointTemperature> {
+  return getJson(`${API_BASE}/api/residents/${residentId}/point-temperature`);
+}
+
+export function fetchRandomPointInCommune(communeId: string): Promise<{ commune_id: string; lat: number; lon: number }> {
+  return getJson(`${API_BASE}/api/communes/${communeId}/random-point`);
+}
+
+export function fetchPointForecast(
+  communeId: string,
+  lat: number,
+  lon: number,
+  day = 0
+): Promise<PointTemperature> {
+  const params = new URLSearchParams({ commune_id: communeId, lat: String(lat), lon: String(lon), day: String(day) });
+  return getJson(`${API_BASE}/api/point-forecast?${params.toString()}`);
 }
 
 export function fetchNotifications(limit = 20): Promise<NotificationItem[]> {

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections import Counter
+import logging
+import statistics
 import threading
 import time
 from typing import Any
@@ -8,10 +10,88 @@ from typing import Any
 from .common import DataSourceError, normalize_text, request_json, utc_now_iso
 from .landslide import LandslideService
 
+_log = logging.getLogger(__name__)
 
 GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+
+# ECMWF/GFS/ICON — the three global NWP centres Open-Meteo re-serves for free
+# (see product paper 5.4.b). Querying them together for the same coordinate
+# gives an epistemic-uncertainty signal (model disagreement) independent of
+# any single model's own error, without needing a trained/calibrated model.
+ENSEMBLE_MODELS = ["ecmwf_ifs025", "gfs_seamless", "icon_seamless"]
+_ENSEMBLE_PRECIP_FLOOR_MM = 5.0  # avoids inflating relative spread on near-zero rain days
+_ENSEMBLE_TEMP_FLOOR_C = 2.0
+CONFIDENCE_LEVELS = [
+    (0.75, "high", "Tin cậy cao"),
+    (0.45, "medium", "Tin cậy trung bình"),
+    (0.0, "low", "Cần theo dõi thêm"),
+]
+
+
+def _confidence_from_relative_spread(relative_spread: float) -> tuple[str, str]:
+    score = max(0.0, min(1.0, 1.0 - relative_spread))
+    for threshold, level, label in CONFIDENCE_LEVELS:
+        if score >= threshold:
+            return level, label
+    return CONFIDENCE_LEVELS[-1][1], CONFIDENCE_LEVELS[-1][2]
+
+
+def _day_ensemble_confidence(
+    precip_values: list[float], temp_max_values: list[float]
+) -> dict[str, Any] | None:
+    """Combines precip + temp-max disagreement across ECMWF/GFS/ICON into one
+    confidence score for a single forecast day. Precip and temp-max both
+    matter for the hazard signals this app derives (heavy_rain, frost); we
+    take the worse (lower-confidence) of the two, matching the AI-safety
+    principle of not overstating confidence when either variable disagrees."""
+    if len(precip_values) < 2 and len(temp_max_values) < 2:
+        return None
+
+    spread_precip = statistics.pstdev(precip_values) if len(precip_values) >= 2 else None
+    spread_temp = statistics.pstdev(temp_max_values) if len(temp_max_values) >= 2 else None
+
+    relative_spreads: list[float] = []
+    if spread_precip is not None:
+        mean_precip = statistics.fmean(precip_values)
+        relative_spreads.append(spread_precip / max(mean_precip, _ENSEMBLE_PRECIP_FLOOR_MM))
+    if spread_temp is not None:
+        relative_spreads.append(spread_temp / _ENSEMBLE_TEMP_FLOOR_C)
+
+    level, label = _confidence_from_relative_spread(max(relative_spreads))
+    score = max(0.0, min(1.0, 1.0 - max(relative_spreads)))
+    return {
+        "score": round(score, 2),
+        "level": level,
+        "label": label,
+        "spread_precip_mm": round(spread_precip, 1) if spread_precip is not None else None,
+        "spread_temp_c": round(spread_temp, 1) if spread_temp is not None else None,
+        "models": ENSEMBLE_MODELS,
+    }
+
+
+def _ensemble_daily_confidence(ensemble_payload: dict[str, Any], days: int) -> list[dict[str, Any] | None]:
+    """Reads Open-Meteo's multi-model response (one array per model per
+    variable, e.g. `precipitation_sum_ecmwf_ifs025`) and returns one
+    confidence dict per forecast day, in day order."""
+    daily = ensemble_payload.get("daily", {}) if isinstance(ensemble_payload, dict) else {}
+    if not isinstance(daily, dict):
+        return [None] * days
+
+    result: list[dict[str, Any] | None] = []
+    for index in range(days):
+        precip_values: list[float] = []
+        temp_max_values: list[float] = []
+        for model in ENSEMBLE_MODELS:
+            precip_series = daily.get(f"precipitation_sum_{model}")
+            temp_series = daily.get(f"temperature_2m_max_{model}")
+            if isinstance(precip_series, list) and index < len(precip_series) and precip_series[index] is not None:
+                precip_values.append(_number(precip_series[index]))
+            if isinstance(temp_series, list) and index < len(temp_series) and temp_series[index] is not None:
+                temp_max_values.append(_number(temp_series[index]))
+        result.append(_day_ensemble_confidence(precip_values, temp_max_values))
+    return result
 
 WEATHER_CODES = {
     0: "Trời quang",
@@ -73,7 +153,9 @@ def _number(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def summarize_forecast(payload: dict[str, Any], days: int) -> dict[str, Any]:
+def summarize_forecast(
+    payload: dict[str, Any], days: int, ensemble_confidence: list[dict[str, Any] | None] | None = None
+) -> dict[str, Any]:
     times = _values(payload, "hourly", "time")[: days * 24]
     temperature = _values(payload, "hourly", "temperature_2m")
     apparent_temperature = _values(payload, "hourly", "apparent_temperature")
@@ -167,6 +249,9 @@ def summarize_forecast(payload: dict[str, Any], days: int) -> dict[str, Any]:
                 "wind_gust_max_kmh": at("wind_gusts_10m_max"),
                 "sunrise": at("sunrise"),
                 "sunset": at("sunset"),
+                "confidence": ensemble_confidence[index]
+                if ensemble_confidence and index < len(ensemble_confidence)
+                else None,
             }
         )
 
@@ -461,9 +546,36 @@ class WeatherService:
         )
         if not isinstance(payload, dict) or "hourly" not in payload:
             raise DataSourceError("Open-Meteo không trả về dữ liệu dự báo hợp lệ.")
+        ensemble_confidence = self._fetch_ensemble_confidence(location, days)
         return {
             "requested_commune": commune,
             "location": location,
             "source": "https://open-meteo.com/en/docs",
-            "forecast": summarize_forecast(payload, days),
+            "forecast": summarize_forecast(payload, days, ensemble_confidence),
         }
+
+    def _fetch_ensemble_confidence(
+        self, location: dict[str, Any], days: int
+    ) -> list[dict[str, Any] | None] | None:
+        """Best-effort: a second, small Open-Meteo call across ECMWF/GFS/ICON
+        to score forecast confidence from model disagreement. Must never break
+        the main forecast — any failure here just means no confidence field."""
+        try:
+            ensemble_payload = request_json(
+                FORECAST_URL,
+                timeout=self.timeout,
+                query={
+                    "latitude": location["latitude"],
+                    "longitude": location["longitude"],
+                    "timezone": "Asia/Ho_Chi_Minh",
+                    "forecast_days": days,
+                    "daily": "precipitation_sum,temperature_2m_max",
+                    "models": ",".join(ENSEMBLE_MODELS),
+                },
+            )
+        except DataSourceError as exc:
+            _log.warning("ensemble confidence unavailable for %s: %s", location.get("name"), exc)
+            return None
+        if not isinstance(ensemble_payload, dict):
+            return None
+        return _ensemble_daily_confidence(ensemble_payload, days)

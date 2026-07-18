@@ -2,15 +2,36 @@
 
 import { motion } from "motion/react";
 import clsx from "clsx";
+import { IconChartHistogram } from "@tabler/icons-react";
 import WeatherIcon, {
-  FlashFloodIcon,
   FrostIcon,
   HeavyRainIcon,
-  LandslideIcon,
   StrongWindIcon,
   ThunderstormIcon,
 } from "@/components/ui/WeatherIcon";
-import type { DayForecast, RiskInfo } from "@/lib/types";
+import type { DayForecast, ForecastConfidence, RiskInfo } from "@/lib/types";
+
+const CONFIDENCE_DOT_CLASS: Record<ForecastConfidence["level"], string> = {
+  high: "bg-risk-0",
+  medium: "bg-risk-1",
+  low: "bg-risk-2",
+};
+
+function ConfidenceNote({ confidence }: { confidence: ForecastConfidence }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+      <IconChartHistogram className="h-3.5 w-3.5 shrink-0" stroke={1.8} />
+      <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", CONFIDENCE_DOT_CLASS[confidence.level])} />
+      <span>
+        Độ tin cậy dự báo: <span className="font-semibold text-ink">{confidence.label}</span>
+        {" · chênh lệch mô hình ECMWF/GFS/ICON "}
+        {confidence.spread_precip_mm != null && `${confidence.spread_precip_mm}mm mưa`}
+        {confidence.spread_precip_mm != null && confidence.spread_temp_c != null && ", "}
+        {confidence.spread_temp_c != null && `${confidence.spread_temp_c}°C`}
+      </span>
+    </div>
+  );
+}
 
 const HAZARD_ACTIONS: Record<string, string> = {
   landslide: "Rời xa sườn dốc, taluy — di chuyển đến nơi an toàn.",
@@ -23,12 +44,13 @@ const HAZARD_ACTIONS: Record<string, string> = {
   thunderstorm_hail: "Trú nơi kiên cố, tránh xa cửa kính, tắt thiết bị điện.",
 };
 
+const HAZARD_VIDEO: Record<string, string> = {
+  landslide: "/landslide-demo.mp4",
+  flash_flood: "/flash-flood-demo.mp4",
+};
+
 function renderHazardIcon(type: string, className: string, style: React.CSSProperties) {
   switch (type) {
-    case "landslide":
-      return <LandslideIcon className={className} style={style} />;
-    case "flash_flood":
-      return <FlashFloodIcon className={className} style={style} />;
     case "heavy_rain":
     case "moderate_rain":
       return <HeavyRainIcon className={className} style={style} />;
@@ -71,6 +93,48 @@ function HazardIconBadge({ card, size }: { card: HazardCardData; size: "lg" | "s
   );
 }
 
+function VideoHazardCard({ card, focused }: { card: HazardCardData; focused: boolean }) {
+  return (
+    <motion.div
+      id={`hazard-${card.type}`}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0, scale: focused ? [1, 1.02, 1] : 1 }}
+      transition={{ duration: 0.3, scale: { duration: 0.6, delay: 0.3 } }}
+      className={clsx(
+        "notice relative scroll-mt-24 overflow-hidden p-0",
+        focused && "ring-2 ring-primary ring-offset-2 ring-offset-bg"
+      )}
+      style={{ borderLeftColor: card.severity.color, borderLeftWidth: 6 }}
+    >
+      <div className="relative aspect-[4/5] w-full overflow-hidden sm:aspect-square">
+        <video
+          src={HAZARD_VIDEO[card.type]}
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="absolute inset-0 h-full w-full object-cover"
+          aria-hidden
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/45 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-display text-lg font-bold text-white">{card.title}</p>
+            <span
+              className="shrink-0 rounded-sm px-2.5 py-1 text-xs font-bold text-white"
+              style={{ backgroundColor: card.severity.color }}
+            >
+              {card.severity.label}
+            </span>
+          </div>
+          {card.official && <p className="text-xs font-semibold text-white/80">Cảnh báo chính thức NCHMF</p>}
+          <p className="mt-1.5 text-sm leading-relaxed text-white/90">{HAZARD_ACTIONS[card.type]}</p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function HazardBoard({
   day,
   focusHazard,
@@ -78,75 +142,88 @@ export default function HazardBoard({
   day: DayForecast;
   focusHazard?: string | null;
 }) {
-  const cards: HazardCardData[] = [];
+  const videoCards: HazardCardData[] = [];
   if (day.landslide) {
-    cards.push({ type: "landslide", title: "Nguy cơ sạt lở đất", severity: day.landslide.severity, official: true });
+    videoCards.push({ type: "landslide", title: "Nguy cơ sạt lở đất", severity: day.landslide.severity, official: true });
   }
   if (day.flash_flood) {
-    cards.push({ type: "flash_flood", title: "Nguy cơ lũ quét", severity: day.flash_flood.severity, official: true });
+    videoCards.push({ type: "flash_flood", title: "Nguy cơ lũ quét", severity: day.flash_flood.severity, official: true });
   }
-  for (const hazard of day.hazards) {
-    cards.push({ type: hazard.type, title: hazard.title, severity: hazard.severity, official: false });
-  }
-  cards.sort((a, b) => b.severity.level - a.severity.level);
+  videoCards.sort((a, b) => b.severity.level - a.severity.level);
 
-  if (cards.length === 0) {
+  const iconCards: HazardCardData[] = day.hazards
+    .map((hazard) => ({ type: hazard.type, title: hazard.title, severity: hazard.severity, official: false }))
+    .sort((a, b) => b.severity.level - a.severity.level);
+
+  if (videoCards.length === 0 && iconCards.length === 0) {
     return (
-      <div className="notice p-5" style={{ borderLeftColor: "var(--color-risk-0)" }}>
-        <div className="flex items-center gap-4">
-          <span
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full"
-            style={{ backgroundColor: "color-mix(in srgb, var(--color-risk-0) 14%, transparent)" }}
-          >
-            <WeatherIcon iconKey={day.icon_key} className="h-9 w-9 text-risk-0" />
-          </span>
-          <div>
-            <p className="font-display text-lg font-bold text-ink">Chưa có cảnh báo nguy hiểm</p>
-            <p className="text-sm text-ink-muted">{day.condition ?? "Thời tiết bình thường"}</p>
+      <div className="flex flex-col gap-2">
+        <div className="notice p-5" style={{ borderLeftColor: "var(--color-risk-0)" }}>
+          <div className="flex items-center gap-4">
+            <span
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full"
+              style={{ backgroundColor: "color-mix(in srgb, var(--color-risk-0) 14%, transparent)" }}
+            >
+              <WeatherIcon iconKey={day.icon_key} className="h-9 w-9 text-risk-0" />
+            </span>
+            <div>
+              <p className="font-display text-lg font-bold text-ink">Chưa có cảnh báo nguy hiểm</p>
+              <p className="text-sm text-ink-muted">{day.condition ?? "Thời tiết bình thường"}</p>
+            </div>
           </div>
         </div>
+        {day.confidence && <ConfidenceNote confidence={day.confidence} />}
       </div>
     );
   }
 
-  const [featured, ...rest] = cards;
-  const featuredFocused = focusHazard === featured.type;
+  const [featured, ...rest] = iconCards;
+  const featuredFocused = featured && focusHazard === featured.type;
 
   return (
     <div className="flex flex-col gap-3">
-      <motion.div
-        key={featured.type}
-        id={`hazard-${featured.type}`}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0, scale: featuredFocused ? [1, 1.02, 1] : 1 }}
-        transition={{ duration: 0.3, scale: { duration: 0.6, delay: 0.3 } }}
-        className={clsx(
-          "notice scroll-mt-24 p-5",
-          featuredFocused && "ring-2 ring-primary ring-offset-2 ring-offset-bg"
-        )}
-        style={{ borderLeftColor: featured.severity.color, borderLeftWidth: 6 }}
-      >
-        <div className="flex items-start gap-4">
-          <HazardIconBadge card={featured} size="lg" />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="font-display text-xl font-bold text-ink">{featured.title}</p>
-              <span
-                className="shrink-0 rounded-sm px-2.5 py-1 text-xs font-bold text-white"
-                style={{ backgroundColor: featured.severity.color }}
-              >
-                {featured.severity.label}
-              </span>
-            </div>
-            {featured.official && (
-              <p className="text-xs font-semibold text-ink-muted">Cảnh báo chính thức NCHMF</p>
-            )}
-            <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
-              {HAZARD_ACTIONS[featured.type] ?? "Theo dõi bản tin và làm theo hướng dẫn của cán bộ bản."}
-            </p>
-          </div>
+      {day.confidence && <ConfidenceNote confidence={day.confidence} />}
+
+      {videoCards.length > 0 && (
+        <div className={clsx("grid gap-3", videoCards.length > 1 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1")}>
+          {videoCards.map((card) => (
+            <VideoHazardCard key={card.type} card={card} focused={focusHazard === card.type} />
+          ))}
         </div>
-      </motion.div>
+      )}
+
+      {featured && (
+        <motion.div
+          key={featured.type}
+          id={`hazard-${featured.type}`}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0, scale: featuredFocused ? [1, 1.02, 1] : 1 }}
+          transition={{ duration: 0.3, scale: { duration: 0.6, delay: 0.3 } }}
+          className={clsx(
+            "notice scroll-mt-24 p-5",
+            featuredFocused && "ring-2 ring-primary ring-offset-2 ring-offset-bg"
+          )}
+          style={{ borderLeftColor: featured.severity.color, borderLeftWidth: 6 }}
+        >
+          <div className="flex items-start gap-4">
+            <HazardIconBadge card={featured} size="lg" />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-display text-xl font-bold text-ink">{featured.title}</p>
+                <span
+                  className="shrink-0 rounded-sm px-2.5 py-1 text-xs font-bold text-white"
+                  style={{ backgroundColor: featured.severity.color }}
+                >
+                  {featured.severity.label}
+                </span>
+              </div>
+              <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
+                {HAZARD_ACTIONS[featured.type] ?? "Theo dõi bản tin và làm theo hướng dẫn của cán bộ bản."}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {rest.length > 0 && (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

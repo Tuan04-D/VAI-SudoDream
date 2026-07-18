@@ -71,3 +71,22 @@ def random_point_in_commune(commune_id: str, fallback_lat: float, fallback_lon: 
         if _point_in_polygon(lon, lat, geometry):
             return lat, lon
     return fallback_lat, fallback_lon
+
+
+def grid_points_in_commune(commune_id: str, resolution: int = 7) -> list[tuple[float, float]]:
+    """Regular lat/lon lattice (resolution x resolution) over the commune's
+    bounding box, clipped to points that actually fall inside its polygon —
+    used to sample a heatmap grid for the terrain-correction overlay. Returns
+    an empty list if the commune has no polygon on file."""
+    geometry = _POLYGON_BY_COMMUNE_ID.get(commune_id)
+    if geometry is None:
+        return []
+    min_lon, min_lat, max_lon, max_lat = _bbox(geometry)
+    points: list[tuple[float, float]] = []
+    for row in range(resolution):
+        lat = min_lat + (max_lat - min_lat) * (row + 0.5) / resolution
+        for col in range(resolution):
+            lon = min_lon + (max_lon - min_lon) * (col + 0.5) / resolution
+            if _point_in_polygon(lon, lat, geometry):
+                points.append((lat, lon))
+    return points
