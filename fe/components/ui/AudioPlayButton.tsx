@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import clsx from "clsx";
+import { IconPlayerPauseFilled, IconPlayerPlayFilled } from "@tabler/icons-react";
 
 export default function AudioPlayButton({
   src,
@@ -47,14 +48,9 @@ export default function AudioPlayButton({
       )}
     >
       {playing ? (
-        <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
-          <rect x="6" y="5" width="4" height="14" rx="1" />
-          <rect x="14" y="5" width="4" height="14" rx="1" />
-        </svg>
+        <IconPlayerPauseFilled className="h-3.5 w-3.5" />
       ) : (
-        <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5">
-          <path d="M8 5v14l11-7Z" />
-        </svg>
+        <IconPlayerPlayFilled className="h-3.5 w-3.5" />
       )}
       {label}
       <audio ref={audioRef} src={src} onEnded={() => setPlaying(false)} className="hidden" />

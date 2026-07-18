@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { motion, AnimatePresence } from "motion/react";
+import { IconMessageCircle } from "@tabler/icons-react";
 import { fetchChatContext } from "@/lib/api";
 import type { ChatContext, ChatMessage, Commune, Language } from "@/lib/types";
 import LanguageToggle from "./LanguageToggle";
@@ -42,7 +43,7 @@ export default function ChatView({
   const commune = communes.find((c) => c.id === communeId) ?? communes[0];
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-9rem)] max-w-3xl flex-col lg:h-[calc(100dvh-4.5rem)] lg:border-x lg:border-border">
+    <div className="card mx-auto flex h-[640px] max-w-3xl flex-col overflow-hidden lg:h-[720px]">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="text-xs text-ink-muted">Dữ liệu xã:</span>
@@ -84,7 +85,7 @@ export default function ChatView({
         {messages.length === 0 && !streamingText && (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-ink-muted">
             <div className="bg-contour mb-1 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <ChatMark />
+              <IconMessageCircle className="h-7 w-7" stroke={1.8} />
             </div>
             <p className="font-display text-base font-semibold text-ink">
               Hỏi tôi về thời tiết {commune?.name}
@@ -103,7 +104,7 @@ export default function ChatView({
         {streamingText !== null && (
           <MessageBubble message={{ role: "assistant", content: streamingText || "..." }} />
         )}
-        {error && <p className="text-center text-sm text-risk-nguyhiem">{error}</p>}
+        {error && <p className="text-center text-sm text-risk-3">{error}</p>}
       </div>
 
       {mode === "text" ? (
@@ -141,13 +142,5 @@ export default function ChatView({
         />
       )}
     </div>
-  );
-}
-
-function ChatMark() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="h-7 w-7">
-      <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" />
-    </svg>
   );
 }

@@ -3,6 +3,7 @@ import { Be_Vietnam_Pro, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import BottomNav from "@/components/nav/BottomNav";
 import TopNav from "@/components/nav/TopNav";
+import { RoleProvider } from "@/lib/RoleProvider";
 
 const beVietnamPro = Be_Vietnam_Pro({
   variable: "--font-be-vietnam-pro",
@@ -40,9 +41,11 @@ export default function RootLayout({
         className="min-h-full flex flex-col bg-bg text-ink antialiased"
         suppressHydrationWarning
       >
-        <TopNav />
-        <div className="flex-1 pb-20 lg:pb-0">{children}</div>
-        <BottomNav />
+        <RoleProvider>
+          <TopNav />
+          <div className="flex-1 pb-20 lg:pb-0">{children}</div>
+          <BottomNav />
+        </RoleProvider>
       </body>
     </html>
   );
