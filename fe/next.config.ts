@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async rewrites() {
+    const target = process.env.API_PROXY_TARGET?.replace(/\/$/, "");
+    if (!target) return [];
+    return [{ source: "/backend/:path*", destination: `${target}/:path*` }];
+  },
 };
 
 export default nextConfig;

@@ -12,7 +12,7 @@ of tying the weather advisory agent's tool-calling loop to OpenAI only.
 """
 from openai import OpenAI
 
-import config
+from core import config
 
 _DEFAULT_MODELS = {
     "DEEPSEEK": "deepseek-v4-flash",

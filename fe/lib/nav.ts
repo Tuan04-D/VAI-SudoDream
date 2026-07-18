@@ -11,6 +11,11 @@ export const RESIDENT_NAV_ITEMS: NavItem[] = [
   { href: "/quan-ly", label: "Cán bộ xã", icon: "map", kind: "route" },
 ];
 
+export const ADMIN_NAV_ITEMS: NavItem[] = [
+  { href: "/admin", label: "Quản trị", icon: "user", kind: "route" },
+  { href: "/", label: "Trang người dân", icon: "home", kind: "route" },
+];
+
 /** Shown at /quan-ly before an official has logged in — no section anchors
  * yet, since the dashboard body (and its #du-bao/#thong-bao/#chatbot
  * sections) hasn't rendered. */

@@ -11,6 +11,7 @@ export default function PhoneAuthForm<T>({
   onLogin,
   onRegister,
   onDone,
+  allowRegister = true,
 }: {
   communes: Commune[];
   defaultCommuneId: string;
@@ -18,6 +19,7 @@ export default function PhoneAuthForm<T>({
   onLogin: (phone: string, password: string) => Promise<T>;
   onRegister: (phone: string, password: string, displayName: string, communeId: string) => Promise<T>;
   onDone: (result: T) => void;
+  allowRegister?: boolean;
 }) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [phone, setPhone] = useState("");
@@ -42,7 +44,7 @@ export default function PhoneAuthForm<T>({
       setError(
         mode === "login"
           ? "Sai số điện thoại hoặc mật khẩu."
-          : "Không đăng ký được — số điện thoại có thể đã tồn tại, hoặc mật khẩu quá ngắn (tối thiểu 6 ký tự)."
+          : "Không đăng ký được — số điện thoại có thể đã tồn tại; mật khẩu cần tối thiểu 8 ký tự, gồm chữ và số."
       );
     } finally {
       setBusy(false);
@@ -57,7 +59,10 @@ export default function PhoneAuthForm<T>({
             [
               { key: "login", label: "Đã có tài khoản" },
               { key: "register", label: "Đăng ký mới" },
-            ] as const
+            ].filter((opt) => allowRegister || opt.key === "login") as Array<{
+              key: "login" | "register";
+              label: string;
+            }>
           ).map((opt) => (
             <button
               key={opt.key}
@@ -92,8 +97,8 @@ export default function PhoneAuthForm<T>({
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          minLength={mode === "register" ? 6 : undefined}
-          placeholder={mode === "register" ? "Tối thiểu 6 ký tự" : undefined}
+          minLength={mode === "register" ? 8 : undefined}
+          placeholder={mode === "register" ? "Tối thiểu 8 ký tự, gồm chữ và số" : undefined}
           className="rounded-md border border-border bg-surface px-3 py-2 text-sm focus-visible:border-primary"
         />
       </label>

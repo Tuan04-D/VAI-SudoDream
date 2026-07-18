@@ -10,7 +10,6 @@ export default function TextChat({
   language,
   context,
   history,
-  residentId,
   onTurnStart,
   onDelta,
   onTurnComplete,
@@ -19,7 +18,6 @@ export default function TextChat({
   language: Language;
   context: ChatContext | null;
   history: ChatMessage[];
-  residentId?: string | null;
   onTurnStart: (userText: string) => void;
   onDelta: (token: string) => void;
   onTurnComplete: (fullText: string) => void;
@@ -42,7 +40,6 @@ export default function TextChat({
         history,
         language,
         context,
-        resident_id: residentId ?? null,
       })) {
         if (chunk.type === "token") {
           full += chunk.text as string;

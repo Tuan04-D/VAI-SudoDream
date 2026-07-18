@@ -21,7 +21,7 @@ import time
 from datetime import date, datetime, timedelta
 
 import communes
-import config
+from core import config
 from weather_ai.advisory import RISK_TITLES, build_advisory
 from weather_ai.agent import AgentConfigurationError, WeatherAdvisoryAgent
 from weather_ai.tools.common import DataSourceError

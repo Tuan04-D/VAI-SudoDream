@@ -1,43 +1,31 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { IconUserCircle } from "@tabler/icons-react";
 import { loginResident, registerResident, updateResidentProfile } from "@/lib/api";
 import { useRole } from "@/lib/RoleProvider";
-import type { Commune } from "@/lib/types";
+import type { Commune, Resident } from "@/lib/types";
 import CommunePicker from "@/components/forecast/CommunePicker";
 import PhoneAuthForm from "@/components/auth/PhoneAuthForm";
 
 export default function ProfileEditor({ communes }: { communes: Commune[] }) {
-  const { resident, official, setResident, setOfficial, loading } = useRole();
-  const [displayName, setDisplayName] = useState("");
-  const [communeId, setCommuneId] = useState("");
-  const [syncedResidentId, setSyncedResidentId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  if (resident && resident.id !== syncedResidentId) {
-    setSyncedResidentId(resident.id);
-    setDisplayName(resident.display_name);
-    setCommuneId(resident.commune_id);
-  }
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    if (!resident) return;
-    setSaving(true);
-    setSaved(false);
-    try {
-      const updated = await updateResidentProfile(resident.id, displayName.trim(), communeId);
-      setResident(updated);
-      setSaved(true);
-    } finally {
-      setSaving(false);
-    }
-  }
+  const { resident, official, admin, setResident, setOfficial, loading, logout } = useRole();
 
   if (loading) {
     return <div className="skeleton mx-auto mt-8 h-48 w-full max-w-sm rounded-lg" />;
+  }
+
+  if (admin) {
+    return (
+      <main className="mx-auto flex max-w-sm flex-col gap-4 px-5 pt-16 text-center">
+        <IconUserCircle className="mx-auto h-14 w-14 text-primary" stroke={1.8} />
+        <h1 className="font-display text-xl font-bold">Tài khoản quản trị</h1>
+        <p className="text-sm text-ink-muted">{admin.display_name}</p>
+        <Link href="/admin" className="rounded-md bg-primary px-4 py-2 font-semibold text-primary-ink">Mở trang quản trị</Link>
+        <button type="button" onClick={() => void logout()} className="text-sm text-ink-muted">Đăng xuất</button>
+      </main>
+    );
   }
 
   if (official) {
@@ -101,6 +89,36 @@ export default function ProfileEditor({ communes }: { communes: Commune[] }) {
     );
   }
 
+  return <ResidentProfile resident={resident} communes={communes} onUpdated={setResident} />;
+}
+
+
+function ResidentProfile({
+  resident,
+  communes,
+  onUpdated,
+}: {
+  resident: Resident;
+  communes: Commune[];
+  onUpdated: (resident: Resident | null) => void;
+}) {
+  const [displayName, setDisplayName] = useState(resident.display_name);
+  const [communeId, setCommuneId] = useState(resident.commune_id);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function handleSave(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setSaved(false);
+    try {
+      onUpdated(await updateResidentProfile(resident.id, displayName.trim(), communeId));
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <main className="mx-auto flex max-w-sm flex-col gap-5 px-5 pt-12">
       <div className="text-center">
@@ -149,7 +167,7 @@ export default function ProfileEditor({ communes }: { communes: Commune[] }) {
 
       <button
         type="button"
-        onClick={() => setResident(null)}
+        onClick={() => onUpdated(null)}
         className="text-center text-xs font-semibold text-ink-muted hover:text-ink"
       >
         Đăng xuất

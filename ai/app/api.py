@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 import tempfile
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -10,11 +11,18 @@ from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 
 from .advisory import build_advisory
 from .agent import AgentConfigurationError, AgentResult, DienBienWeatherAgent
 from .config import get_settings
+from .delivery import (
+    SmsConfigurationError,
+    SmsProviderError,
+    SmsSendRequest,
+    SmsSendResult,
+    SmsService,
+)
 from .schemas import (
     AdvisoryRequest,
     AdvisoryResponse,
@@ -29,6 +37,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 agent = DienBienWeatherAgent(settings=settings)
 video_hazard_agent = VideoHazardAgent(settings=settings)
+sms_service = SmsService()
 
 MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024
 VIDEO_UPLOAD_CHUNK_BYTES = 1024 * 1024
@@ -75,6 +84,36 @@ def health() -> dict[str, Any]:
         "openai_key_configured": bool(settings.openai_api_key),
         "landslide_refresh_hours": settings.landslide_refresh_hours,
     }
+
+
+@app.get("/api/v1/delivery/sms/health")
+def sms_health() -> dict[str, object]:
+    return sms_service.health()
+
+
+@app.post("/api/v1/delivery/sms", response_model=SmsSendResult)
+def send_sms(
+    request: SmsSendRequest,
+    x_delivery_key: str | None = Header(default=None),
+) -> SmsSendResult:
+    if not request.dry_run:
+        expected_key = sms_service.settings.delivery_api_key
+        if not expected_key or not x_delivery_key or not secrets.compare_digest(
+            expected_key, x_delivery_key
+        ):
+            raise HTTPException(status_code=403, detail="Delivery key không hợp lệ.")
+    try:
+        return sms_service.send(
+            request.phone,
+            request.message,
+            dry_run=request.dry_run,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SmsConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except SmsProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 def _generate_advisory(

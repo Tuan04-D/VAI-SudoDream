@@ -158,6 +158,11 @@ export interface Resident {
   lat: number;
   lon: number;
   created_at: string;
+  updated_at?: string;
+  last_login_at?: string | null;
+  role: "resident";
+  status: "active" | "suspended" | "deleted";
+  permissions: string[];
 }
 
 export interface Official {
@@ -166,6 +171,33 @@ export interface Official {
   display_name: string;
   commune_id: string;
   created_at: string;
+  updated_at?: string;
+  last_login_at?: string | null;
+  role: "official";
+  status: "active" | "suspended" | "deleted";
+  permissions: string[];
+}
+
+export interface AdminUser {
+  id: string;
+  phone: string;
+  display_name: string;
+  commune_id: null;
+  created_at: string;
+  updated_at?: string;
+  last_login_at?: string | null;
+  role: "admin";
+  status: "active" | "suspended" | "deleted";
+  permissions: string[];
+}
+
+export type AuthUser = Resident | Official | AdminUser;
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: "bearer";
+  expires_in: number;
+  user: AuthUser;
 }
 
 export interface ChatHistoryMessage {

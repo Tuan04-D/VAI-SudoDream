@@ -7,7 +7,7 @@ from typing import Literal
 import edge_tts
 import httpx
 
-import config
+from core import config
 
 
 def _strip_diacritics(text: str) -> str:

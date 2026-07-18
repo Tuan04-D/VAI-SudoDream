@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fetchOfficerAlerts, markAlertViewed } from "@/lib/api";
+import { fetchCommuneAlerts, markAlertViewed } from "@/lib/api";
 import { playAlertSound } from "@/lib/audio/alertSound";
 import { useRole } from "@/lib/RoleProvider";
 import { RISK_BG_CLASS } from "@/lib/risk";
@@ -26,7 +26,7 @@ export default function HazardSoundBanner({ communeId }: { communeId: string }) 
 
     async function poll() {
       try {
-        const alerts = await fetchOfficerAlerts(communeId);
+        const alerts = await fetchCommuneAlerts(communeId);
         if (cancelled || alerts.length === 0) return;
         const latest = alerts[0];
         if (seenIdRef.current === null) {

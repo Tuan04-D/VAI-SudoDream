@@ -37,6 +37,7 @@ function OfficialGate({ communes }: { communes: Commune[] }) {
           onLogin={loginOfficial}
           onRegister={registerOfficial}
           onDone={setOfficial}
+          allowRegister={false}
         />
       </div>
     </div>

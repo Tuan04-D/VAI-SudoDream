@@ -2,7 +2,8 @@
 
 Nguyên mẫu này nhận tên một xã/phường ở Điện Biên, lấy dự báo thời tiết theo tọa
 độ và cảnh báo sạt lở/lũ quét, sau đó để LLM viết bản tin tiếng Việt ngắn, dễ hiểu.
-Phần gửi Zalo/SMS/loa công cộng và dịch tiếng Thái/Mông **chưa được triển khai**.
+SMS đã có adapter Android Gateway (Twilio là fallback) và chế độ dry-run an toàn.
+Phần gửi Zalo/loa công cộng và dịch tiếng Thái/Mông **chưa được triển khai**.
 
 ## Thành phần
 
@@ -201,6 +202,31 @@ trả mảng `risks`, `residents` hay `village_officials`.
 Swagger tại `/docs` có `CompactAdvisoryResponse` cho frontend và
 `AdvisoryResponse` cho debug. Tiếng Thái và tiếng Mông hiện được trả trạng thái
 `not_implemented`, không tạo bản dịch giả.
+
+## Gửi thử SMS
+
+Sao chép `.env.example` thành `.env`. Để kiểm tra payload, chưa cần kết nối điện
+thoại và không cần bật gửi thật:
+
+```powershell
+curl.exe -X POST "http://localhost:8001/api/v1/delivery/sms" `
+  -H "Content-Type: application/json" `
+  -d '{"phone":"0918359253","message":"Cảnh báo mưa lớn tại Tủa Chùa.","dry_run":true}'
+```
+
+Response che số điện thoại, tự thêm tiền tố `[TRAM BAN]` và có trạng thái
+`dry_run`. Endpoint `GET /api/v1/delivery/sms/health` cho biết cấu hình gửi thật đã
+sẵn sàng hay chưa.
+
+Muốn gửi thật qua Android, cài SMS Gateway for Android, bật Local Server và cấp
+quyền `SEND_SMS`. Điền URL dạng `http://<ip-dien-thoai>:8080/message` cùng username
+và password hiển thị trong app vào `ANDROID_SMS_GATEWAY_*`, sau đó đặt
+`SMS_LIVE_SEND_ENABLED=true`. Máy chạy backend và điện thoại phải chung mạng LAN.
+
+Request gửi thật phải có `dry_run=false` và header `X-Delivery-Key` khớp
+`DELIVERY_API_KEY`. Chỉ mở cổng gateway trong LAN, không công khai username/password
+hoặc port `8080` ra Internet. Twilio vẫn có thể dùng làm fallback bằng cách đặt
+`SMS_PROVIDER=twilio` và cấu hình các biến `TWILIO_*`.
 
 Khi server khởi động, scheduler chạy một lần ngay lập tức, sau đó chạy theo
 `LANDSLIDE_REFRESH_HOURS` (mặc định 6 giờ). Cache nằm ở

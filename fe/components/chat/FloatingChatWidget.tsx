@@ -155,7 +155,6 @@ export default function FloatingChatWidget({ communeId }: { communeId: string })
           language={language}
           context={context}
           history={messages}
-          residentId={resident?.id}
           onTurnStart={(userText) => {
             setError(null);
             setMessages((prev) => [...prev, { role: "user", content: userText }]);

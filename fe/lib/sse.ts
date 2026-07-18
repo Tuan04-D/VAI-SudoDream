@@ -1,10 +1,13 @@
+import { apiFetch } from "./api/client";
+
 export async function* streamSSE(
   url: string,
   body: unknown
 ): AsyncGenerator<Record<string, unknown>> {
-  const res = await fetch(url, {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const res = await apiFetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok || !res.body) {

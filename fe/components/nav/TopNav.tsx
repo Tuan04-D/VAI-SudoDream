@@ -4,17 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { motion } from "motion/react";
-import { OFFICIAL_NAV_ITEMS, OFFICIAL_PRELOGIN_NAV_ITEMS, OFFICIAL_SECTION_IDS, RESIDENT_NAV_ITEMS } from "@/lib/nav";
+import { ADMIN_NAV_ITEMS, OFFICIAL_NAV_ITEMS, OFFICIAL_PRELOGIN_NAV_ITEMS, OFFICIAL_SECTION_IDS, RESIDENT_NAV_ITEMS } from "@/lib/nav";
 import { useActiveSection } from "@/lib/useActiveSection";
 import { useRole } from "@/lib/RoleProvider";
 import NavIcon from "./NavIcon";
 
 export default function TopNav() {
   const pathname = usePathname();
-  const { official } = useRole();
+  const { official, admin } = useRole();
+  const isAdminRoute = pathname.startsWith("/admin");
   const isOfficialRoute = pathname.startsWith("/quan-ly");
   const isOfficial = isOfficialRoute && !!official;
-  const items = !isOfficialRoute ? RESIDENT_NAV_ITEMS : official ? OFFICIAL_NAV_ITEMS : OFFICIAL_PRELOGIN_NAV_ITEMS;
+  const items = admin || isAdminRoute ? ADMIN_NAV_ITEMS : !isOfficialRoute ? RESIDENT_NAV_ITEMS : official ? OFFICIAL_NAV_ITEMS : OFFICIAL_PRELOGIN_NAV_ITEMS;
   const activeSection = useActiveSection(isOfficial ? OFFICIAL_SECTION_IDS : []);
 
   return (

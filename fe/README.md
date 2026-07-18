@@ -23,7 +23,7 @@ Nguồn dữ liệu thật: **Open-Meteo** (dự báo thời tiết), **NCHMF** 
 
 - `weather_ai/` — agent gọi Open-Meteo + NCHMF, dùng LLM (mặc định DeepSeek, đổi được qua `LLM_PROVIDER`) sinh bản tin cảnh báo tiếng Việt tự nhiên (định dạng markdown), có ràng buộc chống ảo giác — chỉ được dùng đúng số liệu trong dữ liệu nguồn, không tự bịa, không tự sinh icon/emoji trong nội dung.
 - `forecast_service.py` — cache và chuẩn hoá dữ liệu dự báo, tính mức rủi ro 0–3 (Bình thường / Chú ý / Nguy hiểm / Rất nguy hiểm) theo ngưỡng mưa, nhiệt độ, gió, mã thời tiết, gắn đúng cảnh báo NCHMF vào đúng ngày, tách theo từng loại hình thái (sạt lở, lũ quét, mưa lớn, sương giá, gió mạnh, dông...).
-- `db.py` — SQLite (`be/data/trambaen.db`, tự tạo khi chạy lần đầu, không cần migrate tay): tài khoản người dân/cán bộ xã (mật khẩu băm PBKDF2 + salt, không lưu plaintext), lịch sử chat, các đợt cảnh báo đã phát, ai đã xem cảnh báo nào.
+- `infrastructure/mongo.py` — MongoDB Atlas: người dùng/RBAC, refresh session, lịch sử chat, cảnh báo, lượt xem, SMS outbox và audit log. Mật khẩu băm Argon2; refresh token chỉ lưu dạng SHA-256.
 - `geo_utils.py` — sinh toạ độ mô phỏng cho người dân khi đăng ký (điểm ngẫu nhiên nằm đúng trong ranh giới xã thật, thay cho GPS thật).
 - `chat/` — chatbot/voice hỏi đáp (ASR → LLM → TTS), grounded theo đúng dữ liệu xã đang xem, giới hạn phạm vi hỏi đáp thời tiết/mùa vụ/phòng tránh thiên tai, không khẳng định chắc chắn thiên tai sẽ xảy ra, không tự bịa điểm sơ tán.
 - `llm_notify.py` — dịch bản tin tiếng Việt sang tiếng H'Mông dạng đọc được cho TTS (số viết thành chữ, không dùng markdown).
@@ -35,7 +35,7 @@ Nguồn dữ liệu thật: **Open-Meteo** (dự báo thời tiết), **NCHMF** 
 - `/quan-ly` — trang cán bộ xã, yêu cầu đăng nhập. Giữ đầy đủ dữ liệu chi tiết (bản đồ nhiệt độ/lượng mưa, bản tin AI, biểu đồ 5 ngày), có thêm bản đồ người dân đã xem cảnh báo (chấm xanh = đã xem, chấm đỏ = chưa xem) chọn được theo từng đợt cảnh báo, và nút tự phát cảnh báo thủ công.
 - `/ho-so` — hồ sơ cá nhân, hiển thị đúng theo vai trò đang đăng nhập (người dân hoặc cán bộ).
 
-Đăng nhập/đăng ký hiện chỉ ở mức số điện thoại + mật khẩu thật (đã băm), **chưa có OTP/JWT/session/rate-limit** — đủ cho demo, cần làm thêm nếu triển khai thật. Vai trò người dân/cán bộ chỉ phân biệt ở giao diện, không có kiểm tra quyền phía server.
+Xác thực dùng access JWT ngắn hạn trong bộ nhớ trình duyệt và refresh token xoay vòng trong cookie HttpOnly. Backend kiểm tra vai trò, trạng thái tài khoản và phạm vi xã; tài khoản cán bộ do admin cấp, không tự đăng ký.
 
 ## 3. Chức năng hiện có
 
@@ -56,17 +56,10 @@ Nguồn dữ liệu thật: **Open-Meteo** (dự báo thời tiết), **NCHMF** 
 
 ## 4. Cơ sở dữ liệu
 
-SQLite, file `be/data/trambaen.db` — **tự khởi tạo** (tạo file + bảng) khi backend chạy lần đầu, không cần thao tác migrate. Các bảng chính:
-
-| Bảng | Nội dung |
-|---|---|
-| `residents` | Người dân: số điện thoại (duy nhất), mật khẩu đã băm, tên, xã, toạ độ mô phỏng |
-| `officials` | Cán bộ xã: số điện thoại, mật khẩu đã băm, tên, xã quản lý |
-| `chat_messages` | Lịch sử hội thoại văn bản (chỉ lưu khi người dân đã đăng nhập) |
-| `alerts` | Mỗi lần phát cảnh báo (tự động hoặc do cán bộ phát), mức rủi ro, loại thiên tai, nội dung, trạng thái |
-| `alert_views` | Người dân nào đã xem cảnh báo (alert) nào — nguồn cho bản đồ chấm xanh/đỏ |
-
-Có sẵn `be/mock_db.json` — 3 tài khoản người dân (cùng 1 xã, toạ độ khác nhau) + 1 tài khoản cán bộ xã quản lý xã đó, để đăng nhập thử ngay không cần đăng ký lại. Mật khẩu trong file này ở dạng thô chỉ để tiện test cục bộ — **không dùng cho hệ thống thật**.
+MongoDB có các collection `communes`, `users`, `auth_sessions`, `chat_messages`,
+`alerts`, `alert_views`, `alert_deliveries` và `audit_logs`. Index được tạo tự
+động lúc backend khởi động. Schema, quan hệ logic, RBAC và luồng SMS outbox được
+mô tả chi tiết trong `be/MONGO_SCHEMA.md`.
 
 ## 5. Yêu cầu môi trường
 
@@ -87,9 +80,7 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Mở `.env` vừa tạo, điền `LLM_API_KEY`. `KAGGLE_NGROK_URL` để trống nếu chưa dùng bước Kaggle — không có vẫn chạy được bình thường.
-
-Không cần tạo database thủ công — `db.py` tự tạo file `data/trambaen.db` và toàn bộ bảng khi server khởi động lần đầu.
+Mở `.env`, điền `LLM_API_KEY`, `MONGO_URI`, `JWT_SECRET_KEY` và tài khoản bootstrap admin. Hướng dẫn Atlas và SMS nằm trong `be/README.md`. `KAGGLE_NGROK_URL` có thể để trống nếu chưa dùng giọng nói.
 
 ### 6.2. Frontend
 
@@ -121,12 +112,12 @@ Mở `http://localhost:3000`.
 ## 8. Dữ liệu thật vs mô phỏng
 
 - **Thật**: dự báo thời tiết (Open-Meteo), cảnh báo sạt lở/lũ quét (NCHMF), ranh giới hành chính 45 xã/phường (OpenStreetMap).
-- **Mô phỏng**: toạ độ GPS của người dân (random nhưng nằm đúng trong ranh giới xã đã chọn, thay cho GPS thiết bị thật), tài khoản mẫu trong `mock_db.json`.
+- **Mô phỏng**: toạ độ GPS của người dân (random nhưng nằm đúng trong ranh giới xã đã chọn, thay cho GPS thiết bị thật).
 
 ## 9. Giới hạn đã biết
 
-- Đăng nhập/đăng ký chỉ ở mức giao diện, mật khẩu có băm nhưng chưa có OTP, JWT/session thật, hay rate-limit/khoá tài khoản — phù hợp demo, cần làm lại phần xác thực nếu triển khai thật.
+- Chưa có OTP và rate limiting phân tán; khi public Internet nên đặt rate limit ở API gateway/reverse proxy và bổ sung quy trình khôi phục tài khoản.
 - Bản đồ chỉ có 2 mức phóng: xã và toàn tỉnh — chưa có ranh giới cấp thôn/bản (không có nguồn public đủ chi tiết).
 - TTS tiếng H'Mông chạy qua Kaggle Notebook, không phải service luôn sẵn sàng — có thể lỗi ngẫu nhiên; hệ thống tự hiện "đang chuẩn bị" thay vì crash khi việc này xảy ra.
-- Chưa tích hợp Zalo/SMS thật — kênh phân phối cảnh báo hiện tại chỉ có web.
+- SMS đã có durable outbox và Android/Twilio bridge; Zalo chưa tích hợp.
 - Video nền trang chủ (`fe/public/misty-mountains.mp4`) là asset demo — cân nhắc Git LFS nếu muốn giữ dung lượng repo nhỏ.

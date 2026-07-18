@@ -1,6 +1,5 @@
 import type { NotificationItem } from "@/lib/types";
 import NotificationCard from "./NotificationCard";
-import GenerateButton from "./GenerateButton";
 
 export default function NotificationsSection({
   items,
@@ -16,7 +15,6 @@ export default function NotificationsSection({
           <h2 className="font-display text-2xl font-bold">Thông báo</h2>
           <p className="text-sm text-ink-muted">Cảnh báo gửi hàng ngày cho các xã có nguy cơ cao nhất</p>
         </div>
-        <GenerateButton />
       </header>
 
       {loadError ? (
@@ -25,7 +23,7 @@ export default function NotificationsSection({
         </div>
       ) : items.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface-muted p-5 text-center text-sm text-ink-muted">
-          Chưa có thông báo nào. Nhấn &ldquo;Tạo thông báo mới&rdquo; để chạy thử.
+          Chưa có thông báo nào. Cảnh báo sẽ xuất hiện khi hệ thống tự động phát hoặc cán bộ xã phê duyệt.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">

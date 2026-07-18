@@ -1,19 +1,21 @@
-"""
-Chat endpoints — stateless by design: no login, no database. The frontend
-keeps the conversation history in memory for the current page session and
-sends it back with every request (see "history" field below). This matches
-the product scope: single in-app session, no persisted chat history.
+"""Chat endpoints.
+
+Anonymous use remains stateless. Authenticated resident text turns are saved
+under the identity from the bearer token; client-supplied resident IDs are
+never trusted.
 """
 import asyncio
 import json as _json
 import queue as _queue
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-import db
+from core import security as auth
+from infrastructure import mongo as db
 from .. import llm
 from ..model_client import model_client
 
@@ -27,10 +29,9 @@ class ChatMessage(BaseModel):
 
 class TextMessageRequest(BaseModel):
     message: str
-    history: list[ChatMessage] = []
+    history: list[ChatMessage] = Field(default_factory=list)
     language: str = "vietnamese"
     context: dict | None = None
-    resident_id: str | None = None
 
 
 def _history_dicts(history: list[ChatMessage]) -> list[dict]:
@@ -61,24 +62,30 @@ def _run_stream_generator(gen_func, *args) -> tuple:
 
 
 @router.post("/message/text")
-async def chat_text_endpoint(request: TextMessageRequest):
+async def chat_text_endpoint(
+    request: TextMessageRequest,
+    current_user: Annotated[dict | None, Depends(auth.get_optional_user)],
+):
     if request.language not in ("vietnamese", "hmong"):
         raise HTTPException(status_code=400, detail="language must be 'vietnamese' or 'hmong'")
     response_text = await asyncio.to_thread(
         llm.chat_text, _history_dicts(request.history), request.message, request.language, request.context,
     )
-    if request.resident_id and db.get_resident(request.resident_id):
-        db.add_chat_message(request.resident_id, "user", request.message, request.language)
-        db.add_chat_message(request.resident_id, "assistant", response_text, request.language)
+    if current_user and current_user.get("role") == "resident":
+        await db.add_chat_message(current_user["_id"], "user", request.message, request.language)
+        await db.add_chat_message(current_user["_id"], "assistant", response_text, request.language)
     return {"content": response_text, "message_id": str(uuid.uuid4())}
 
 
 @router.post("/message/text/stream")
-async def chat_text_stream_endpoint(request: TextMessageRequest):
+async def chat_text_stream_endpoint(
+    request: TextMessageRequest,
+    current_user: Annotated[dict | None, Depends(auth.get_optional_user)],
+):
     if request.language not in ("vietnamese", "hmong"):
         raise HTTPException(status_code=400, detail="language must be 'vietnamese' or 'hmong'")
     history = _history_dicts(request.history)
-    can_persist = bool(request.resident_id and db.get_resident(request.resident_id))
+    resident_id = current_user["_id"] if current_user and current_user.get("role") == "resident" else None
 
     async def generate():
         q, DONE = _run_stream_generator(
@@ -98,9 +105,9 @@ async def chat_text_stream_endpoint(request: TextMessageRequest):
                 return
             full_text += item
             yield _sse({"type": "token", "text": item})
-        if can_persist:
-            db.add_chat_message(request.resident_id, "user", request.message, request.language)
-            db.add_chat_message(request.resident_id, "assistant", full_text, request.language)
+        if resident_id:
+            await db.add_chat_message(resident_id, "user", request.message, request.language)
+            await db.add_chat_message(resident_id, "assistant", full_text, request.language)
         yield _sse({"type": "done", "message_id": str(uuid.uuid4())})
 
     return StreamingResponse(

@@ -3,6 +3,8 @@
 __pycache__/
 *.pyc
 *.pyo
+be/data/trambaen.db*
+.run/
 
 # env files — keep the .example templates
 .env

@@ -20,7 +20,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-import config
+from core import config
 import llm_provider
 from .tools import LandslideService, WeatherService
 

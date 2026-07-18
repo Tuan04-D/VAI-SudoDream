@@ -66,9 +66,9 @@
   --color-risk-2: var(--color-risk-2);
   --color-risk-3: var(--color-risk-3);
 
-  --font-display: var(--font-be-vietnam-pro);
-  --font-body: var(--font-be-vietnam-pro);
-  --font-data: var(--font-jetbrains-mono);
+  --font-display: "Segoe UI", Arial, sans-serif;
+  --font-body: "Segoe UI", Arial, sans-serif;
+  --font-data: "Cascadia Mono", Consolas, monospace;
 
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
