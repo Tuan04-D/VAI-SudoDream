@@ -27,9 +27,9 @@ export class ConvoSocket {
   onError: ((message: string) => void) | null = null;
   onClose: (() => void) | null = null;
 
-  open(chatbotApiBase: string, language: Language, context: ChatContext | null): Promise<void> {
+  open(apiBase: string, language: Language, context: ChatContext | null): Promise<void> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(wsUrl(chatbotApiBase, "/ws/convo"));
+      const ws = new WebSocket(wsUrl(apiBase, "/ws/convo"));
       this.ws = ws;
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: "config", language, context }));

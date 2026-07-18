@@ -2,18 +2,35 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
-import type { Commune, ForecastDay } from "@/lib/types";
-import { RISK_LABEL, RISK_BG_CLASS } from "@/lib/risk";
-import HazardIcon from "@/components/ui/HazardIcon";
+import { IconArrowRight } from "@tabler/icons-react";
+import type { Commune, CurrentWeather, DayForecast } from "@/lib/types";
+import { riskBg } from "@/lib/risk";
+import WeatherIcon, { FlashFloodIcon, LandslideIcon } from "@/components/ui/WeatherIcon";
 
 export default function RiskHeroCard({
   commune,
   today,
+  current,
 }: {
   commune: Commune;
-  today: ForecastDay;
+  today: DayForecast | undefined;
+  current: CurrentWeather | null;
 }) {
-  const isCalm = today.risk_level === "thap";
+  if (!today) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+        <div className="rounded-lg border border-white/15 bg-white/10 p-5 text-sm text-white/85 backdrop-blur">
+          <p className="font-semibold">{commune.name}</p>
+          <p className="mt-1">
+            Chưa lấy được dữ liệu dự báo — AI service (cổng 8002) có thể chưa chạy. Xem hướng dẫn trong{" "}
+            <code className="font-data">NOTES.md</code>.
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  const temp = current?.temperature_c ?? today.temp_max_c;
 
   return (
     <motion.div
@@ -23,41 +40,56 @@ export default function RiskHeroCard({
       whileHover={{ y: -2 }}
     >
       <Link
-        href="/du-bao"
+        href="/quan-ly#du-bao"
         className="group block overflow-hidden rounded-lg bg-surface shadow-2xl shadow-black/40 transition-shadow hover:shadow-black/50"
       >
-        <div className={`bg-contour-light relative overflow-hidden ${RISK_BG_CLASS[today.risk_level]} px-6 py-5 text-white`}>
-          <p className="text-xs font-semibold uppercase tracking-wider opacity-90">
-            Hôm nay · {commune.name}
-          </p>
-          <div className="mt-2 flex items-center gap-3.5">
-            <HazardIcon type={today.hazard_type} className="h-10 w-10 shrink-0" />
+        <div className={`bg-contour-light relative overflow-hidden ${riskBg(today.risk)} px-6 py-5 text-white`}>
+          <div className="flex items-start justify-between">
             <div>
-              <p className="font-display text-2xl font-bold leading-tight">
-                Mức {RISK_LABEL[today.risk_level]}
-              </p>
-              <p className="text-sm opacity-95">{today.hazard_label}</p>
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-90">{commune.name}</p>
+              <p className="mt-0.5 text-sm font-medium opacity-95">{today.condition ?? "Đang cập nhật"}</p>
             </div>
+            <WeatherIcon iconKey={current?.icon_key ?? today.icon_key} className="h-9 w-9 shrink-0" />
+          </div>
+          <div className="mt-3 flex items-end gap-3">
+            <span className="font-display text-5xl font-extrabold leading-none tabular-nums">
+              {temp != null ? Math.round(temp) : "--"}°
+            </span>
+            <span className="mb-1 text-sm opacity-90">
+              {today.temp_min_c != null && today.temp_max_c != null
+                ? `${Math.round(today.temp_min_c)}° / ${Math.round(today.temp_max_c)}°`
+                : ""}
+            </span>
+            <span className="mb-1 ml-auto rounded-sm bg-black/20 px-2 py-1 text-xs font-bold">
+              {today.risk.label}
+            </span>
           </div>
         </div>
+
+        {(today.landslide || today.flash_flood) && (
+          <div className="flex flex-col gap-1.5 border-b border-border bg-surface-muted px-6 py-2.5">
+            {today.landslide && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-risk-3">
+                <LandslideIcon className="h-3.5 w-3.5" /> Nguy cơ sạt lở đất — cảnh báo NCHMF
+              </span>
+            )}
+            {today.flash_flood && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-risk-3">
+                <FlashFloodIcon className="h-3.5 w-3.5" /> Nguy cơ lũ quét — cảnh báo NCHMF
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="px-6 py-4">
           <p className="text-sm leading-relaxed text-ink">
-            {isCalm ? "Thời tiết ổn định, chưa có nguy cơ." : today.recommended_action}
+            {today.rain_sum_mm != null
+              ? `Lượng mưa dự kiến hôm nay khoảng ${today.rain_sum_mm}mm.`
+              : "Chưa có dữ liệu mưa."}
           </p>
           <p className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary">
             Xem bản đồ dự báo 5 ngày
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-4 w-4 transition-transform group-hover:translate-x-1"
-            >
-              <line x1="5" y1="12" x2="19" y2="12" />
-              <polyline points="12 5 19 12 12 19" />
-            </svg>
+            <IconArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" stroke={2.2} />
           </p>
         </div>
       </Link>

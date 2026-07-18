@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CHATBOT_API_BASE } from "@/lib/api";
+import { IconSend2 } from "@tabler/icons-react";
+import { API_BASE } from "@/lib/api";
 import { streamSSE } from "@/lib/sse";
 import type { ChatContext, ChatMessage, Language } from "@/lib/types";
 
@@ -9,6 +10,7 @@ export default function TextChat({
   language,
   context,
   history,
+  residentId,
   onTurnStart,
   onDelta,
   onTurnComplete,
@@ -17,6 +19,7 @@ export default function TextChat({
   language: Language;
   context: ChatContext | null;
   history: ChatMessage[];
+  residentId?: string | null;
   onTurnStart: (userText: string) => void;
   onDelta: (token: string) => void;
   onTurnComplete: (fullText: string) => void;
@@ -34,11 +37,12 @@ export default function TextChat({
 
     let full = "";
     try {
-      for await (const chunk of streamSSE(`${CHATBOT_API_BASE}/chat/message/text/stream`, {
+      for await (const chunk of streamSSE(`${API_BASE}/chat/message/text/stream`, {
         message: text,
         history,
         language,
         context,
+        resident_id: residentId ?? null,
       })) {
         if (chunk.type === "token") {
           full += chunk.text as string;
@@ -77,10 +81,7 @@ export default function TextChat({
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-ink transition-transform hover:enabled:scale-105 active:enabled:scale-95 disabled:opacity-40"
         aria-label="Gửi"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-          <line x1="22" y1="2" x2="11" y2="13" />
-          <polygon points="22 2 15 22 11 13 2 9 22 2" />
-        </svg>
+        <IconSend2 className="h-5 w-5" stroke={2} />
       </button>
     </div>
   );

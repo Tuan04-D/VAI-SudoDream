@@ -4,11 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { motion } from "motion/react";
-import { NAV_ITEMS } from "@/lib/nav";
+import { OFFICIAL_NAV_ITEMS, OFFICIAL_PRELOGIN_NAV_ITEMS, OFFICIAL_SECTION_IDS, RESIDENT_NAV_ITEMS } from "@/lib/nav";
+import { useActiveSection } from "@/lib/useActiveSection";
+import { useRole } from "@/lib/RoleProvider";
 import NavIcon from "./NavIcon";
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const { official } = useRole();
+  const isOfficialRoute = pathname.startsWith("/quan-ly");
+  const isOfficial = isOfficialRoute && !!official;
+  const items = !isOfficialRoute ? RESIDENT_NAV_ITEMS : official ? OFFICIAL_NAV_ITEMS : OFFICIAL_PRELOGIN_NAV_ITEMS;
+  const activeSection = useActiveSection(isOfficial ? OFFICIAL_SECTION_IDS : []);
 
   return (
     <nav
@@ -16,8 +23,9 @@ export default function BottomNav() {
       className="fixed bottom-0 inset-x-0 z-40 border-t border-border bg-surface/90 backdrop-blur-md supports-[backdrop-filter]:bg-surface/75 lg:hidden"
     >
       <div className="mx-auto flex max-w-xl items-stretch justify-between px-1">
-        {NAV_ITEMS.map((item) => {
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+        {items.map((item) => {
+          const active =
+            item.kind === "route" ? pathname === item.href : isOfficial && activeSection === item.href.split("#")[1];
           return (
             <Link
               key={item.href}
@@ -27,7 +35,7 @@ export default function BottomNav() {
               {active && (
                 <motion.span
                   layoutId="bottom-nav-active"
-                  className="absolute top-1 h-8 w-12 rounded-full bg-primary/10"
+                  className="absolute top-1 h-8 w-12 rounded-md bg-primary/10"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
