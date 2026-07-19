@@ -1,13 +1,13 @@
-import { API_BASE, apiFetch, getJson, sendJson } from "@/lib/api/client";
+import { API_BASE, apiFetch, getJson, getPublicJson, sendJson } from "@/lib/api/client";
 import type { NotificationItem, ViewedMapResponse } from "@/lib/types";
 
 
 export function fetchNotifications(limit = 20): Promise<NotificationItem[]> {
-  return getJson(`${API_BASE}/api/notifications?limit=${limit}`);
+  return getPublicJson(`${API_BASE}/api/notifications?limit=${limit}`, 30);
 }
 
 export function fetchCommuneAlerts(communeId: string): Promise<NotificationItem[]> {
-  return getJson(`${API_BASE}/api/alerts?commune_id=${encodeURIComponent(communeId)}`);
+  return getPublicJson(`${API_BASE}/api/alerts?commune_id=${encodeURIComponent(communeId)}`, 8);
 }
 
 export function generateNotifications(): Promise<{ created: number }> {

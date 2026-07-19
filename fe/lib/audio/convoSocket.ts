@@ -1,8 +1,30 @@
 import { AudioQueue } from "./audioQueue";
 import type { ChatContext, Language } from "@/lib/types";
 
-function wsUrl(base: string, path: string): string {
-  return base.replace(/^http/, "ws") + path;
+function asWebSocketUrl(base: string, path: string): string {
+  return base.replace(/\/$/, "").replace(/^http/, "ws") + path;
+}
+
+async function resolveWebSocketUrl(apiBase: string, path: string): Promise<string> {
+  const explicitBase = process.env.NEXT_PUBLIC_WS_BASE?.trim();
+  if (explicitBase) return asWebSocketUrl(explicitBase, path);
+  if (/^https?:\/\//i.test(apiBase)) return asWebSocketUrl(apiBase, path);
+
+  // Vercel rewrites proxy HTTP but not WebSocket upgrades. This same-origin
+  // endpoint exposes only the already-public backend origin so the browser can
+  // connect directly without duplicating deployment configuration.
+  try {
+    const response = await fetch(`${apiBase}/api/runtime`, { cache: "no-store" });
+    if (response.ok) {
+      const payload = await response.json() as { websocket_base?: string };
+      if (payload.websocket_base) return asWebSocketUrl(payload.websocket_base, path);
+    }
+  } catch {
+    // Fall through for local setups that do support WebSocket proxying.
+  }
+
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  return asWebSocketUrl(`${origin}${apiBase}`, path);
 }
 
 function blobToB64(blob: Blob): Promise<string> {
@@ -27,9 +49,10 @@ export class ConvoSocket {
   onError: ((message: string) => void) | null = null;
   onClose: (() => void) | null = null;
 
-  open(apiBase: string, language: Language, context: ChatContext | null): Promise<void> {
+  async open(apiBase: string, language: Language, context: ChatContext | null): Promise<void> {
+    const url = await resolveWebSocketUrl(apiBase, "/ws/convo");
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(wsUrl(apiBase, "/ws/convo"));
+      const ws = new WebSocket(url);
       this.ws = ws;
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: "config", language, context }));

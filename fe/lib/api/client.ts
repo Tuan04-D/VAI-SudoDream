@@ -8,6 +8,7 @@ export const API_BASE = typeof window === "undefined"
 
 let accessToken: string | null = null;
 let refreshPromise: Promise<AuthResponse | null> | null = null;
+const publicResponseCache = new Map<string, { expiresAt: number; value: Promise<unknown> }>();
 
 
 export class ApiError extends Error {
@@ -86,6 +87,32 @@ export async function requestJson<T>(input: string, init: RequestInit = {}): Pro
 
 export function getJson<T>(input: string): Promise<T> {
   return requestJson<T>(input, { cache: "no-store" });
+}
+
+
+/**
+ * Read public, non-user-specific data without making every route transition
+ * wait for the upstream service again. Next.js keeps a short server cache;
+ * the browser cache also deduplicates requests made by sibling components.
+ */
+export function getPublicJson<T>(input: string, revalidateSeconds: number): Promise<T> {
+  if (typeof window === "undefined") {
+    return requestJson<T>(input, { next: { revalidate: revalidateSeconds } });
+  }
+
+  const now = Date.now();
+  const cached = publicResponseCache.get(input);
+  if (cached && cached.expiresAt > now) return cached.value as Promise<T>;
+
+  const value = requestJson<T>(input, { cache: "default" }).catch((error) => {
+    publicResponseCache.delete(input);
+    throw error;
+  });
+  publicResponseCache.set(input, {
+    expiresAt: now + revalidateSeconds * 1000,
+    value,
+  });
+  return value;
 }
 
 

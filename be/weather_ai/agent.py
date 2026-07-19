@@ -40,6 +40,13 @@ báo với cảnh báo chính thức. Nếu cache cũ hoặc không thấy xã t
 cảnh báo, phải nói rõ giới hạn đó. Không tuyên bố "an toàn tuyệt đối". Chưa dịch
 sang tiếng Thái hoặc tiếng Mông trong phiên bản này.
 
+Mỗi ngày trong dữ liệu nguồn có thể có trường "confidence" (score, level,
+label, spread_precip_mm, spread_temp_c). Đây là mức đồng thuận giữa ba mô hình
+ECMWF/GFS/ICON, không phải xác suất thiên tai. Nếu confidence.level của hôm nay
+là "low" hoặc "medium", phải thêm một câu ngắn giải thích các mô hình còn chênh
+lệch về mưa hoặc nhiệt độ và khuyên theo dõi bản tin cập nhật; không được diễn
+giải confidence như cam kết dự báo chắc chắn.
+
 TUYỆT ĐỐI KHÔNG dùng emoji, icon, hay ký hiệu trang trí (✅⚠️🔴 v.v.) trong nội
 dung — giao diện đã có icon và màu riêng để thể hiện mức độ nguy hiểm.
 """

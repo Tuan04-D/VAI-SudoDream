@@ -31,6 +31,15 @@ export interface HazardTag {
   severity: RiskInfo;
 }
 
+export interface ForecastConfidence {
+  score: number;
+  level: "high" | "medium" | "low";
+  label: string;
+  spread_precip_mm: number | null;
+  spread_temp_c: number | null;
+  models: string[];
+}
+
 export interface CurrentWeather {
   time: string | null;
   weather_code: number | null;
@@ -71,6 +80,7 @@ export interface DayForecast {
   landslide: HazardWindow | null;
   flash_flood: HazardWindow | null;
   hazards: HazardTag[];
+  confidence?: ForecastConfidence | null;
 }
 
 export type MapCommuneDay = DayForecast;

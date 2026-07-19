@@ -1,11 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  IconCircleCheck,
+  IconClockExclamation,
+  IconMapPin,
+  IconShieldLock,
+  IconUsers,
+} from "@tabler/icons-react";
 import { fetchOfficerAlerts, fetchViewedMap, sendOfficerAlert } from "@/lib/api";
 import type { Commune, NotificationItem, ViewedMapResponse } from "@/lib/types";
 import CommunePicker from "@/components/forecast/CommunePicker";
 import { useRole } from "@/lib/RoleProvider";
 import ResidentViewMap from "./ResidentViewMap";
+
+function maskedPhone(phone: string) {
+  const local = phone.startsWith("+84") ? `0${phone.slice(3)}` : phone;
+  return local.length >= 7 ? `${local.slice(0, 3)}****${local.slice(-3)}` : "***";
+}
 
 export default function ResidentViewMapSection({
   communes,
@@ -70,6 +82,7 @@ export default function ResidentViewMapSection({
   const viewedCount = viewedMap?.residents.filter((r) => r.viewed).length ?? 0;
   const totalCount = viewedMap?.residents.length ?? 0;
   const unviewedCount = totalCount - viewedCount;
+  const selectedCommuneName = communes.find((commune) => commune.id === communeId)?.name ?? "Xã đang chọn";
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 px-5 lg:px-8">
@@ -112,14 +125,76 @@ export default function ResidentViewMapSection({
 
       {viewedMap && (
         <>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <StatTile label="Đã xem" value={viewedCount} color="var(--color-risk-0)" />
             <StatTile label="Chưa xem" value={unviewedCount} color="var(--color-risk-3)" />
             <StatTile label="Tổng số đăng ký" value={totalCount} color="var(--color-primary)" />
           </div>
+
+          <div className={`flex items-start gap-3 rounded-md px-4 py-3 text-sm ${unviewedCount > 0 ? "bg-risk-3/8 text-risk-3" : "bg-risk-0/8 text-risk-0"}`}>
+            {unviewedCount > 0
+              ? <IconClockExclamation className="mt-0.5 h-5 w-5 shrink-0" stroke={1.8} />
+              : <IconCircleCheck className="mt-0.5 h-5 w-5 shrink-0" stroke={1.8} />
+            }
+            <p className="leading-5">
+              {unviewedCount > 0
+                ? `${unviewedCount} người dân chưa bấm “Tôi đã đọc” cho đợt cảnh báo này, nên bản đồ đang hiển thị ${unviewedCount} chấm đỏ.`
+                : "Tất cả người dân đã đăng ký trong xã đều xác nhận đã đọc đợt cảnh báo này."
+              }
+            </p>
+          </div>
+
           <div className="card overflow-hidden">
-            <div className="relative h-[50vh]">
-              <ResidentViewMap residents={viewedMap.residents} />
+            <div className="grid lg:grid-cols-[1.5fr_.72fr]">
+              <div className="relative h-[48vh] min-h-[360px] border-b border-border lg:border-b-0 lg:border-r">
+                <ResidentViewMap residents={viewedMap.residents} communeId={communeId} />
+                <div className="pointer-events-none absolute left-3 top-3 z-10 rounded-md bg-white/90 p-2.5 text-[10px] font-semibold text-ink shadow-lg ring-1 ring-ink/5 backdrop-blur-sm">
+                  <p className="flex items-center gap-1.5 font-bold text-primary-dark">
+                    <IconMapPin className="h-3.5 w-3.5" /> {selectedCommuneName}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-risk-0 ring-2 ring-white" /> Đã xem</span>
+                    <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-risk-3 ring-2 ring-white" /> Chưa xem</span>
+                  </div>
+                </div>
+              </div>
+
+              <aside className="flex min-h-0 flex-col bg-surface p-4">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <IconUsers className="h-5 w-5" stroke={1.8} />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold text-ink">Trạng thái từng người</h3>
+                    <p className="text-[10px] text-ink-muted">Theo đợt cảnh báo đang chọn</p>
+                  </div>
+                </div>
+
+                {viewedMap.residents.length > 0 ? (
+                  <div className="scrollbar-none mt-4 flex max-h-[360px] flex-col gap-2 overflow-y-auto">
+                    {viewedMap.residents.map((resident) => (
+                      <article key={resident.id} className="flex items-center gap-3 rounded-md bg-surface-muted/70 p-3">
+                        <span className={`h-3 w-3 shrink-0 rounded-full ring-2 ring-white ${resident.viewed ? "bg-risk-0" : "bg-risk-3"}`} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold text-ink">{resident.display_name}</p>
+                          <p className="font-data text-[10px] text-ink-muted">{maskedPhone(resident.phone)}</p>
+                        </div>
+                        <span className={`shrink-0 text-[10px] font-bold ${resident.viewed ? "text-risk-0" : "text-risk-3"}`}>
+                          {resident.viewed ? "Đã xem" : "Chưa xem"}
+                        </span>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-md bg-surface-muted p-4 text-center text-xs leading-5 text-ink-muted">
+                    Chưa có người dân đăng ký tại xã này.
+                  </div>
+                )}
+              </aside>
+            </div>
+            <div className="flex items-start gap-2 border-t border-border bg-surface-muted/70 px-4 py-3 text-[10px] leading-4 text-ink-muted">
+              <IconShieldLock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+              Vị trí chấm là vị trí minh họa ngẫu nhiên trong phạm vi xã để bảo vệ riêng tư, không phải tọa độ GPS chính xác của người dân.
             </div>
           </div>
         </>

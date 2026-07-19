@@ -3,6 +3,7 @@ import "./globals.css";
 import BottomNav from "@/components/nav/BottomNav";
 import TopNav from "@/components/nav/TopNav";
 import { RoleProvider } from "@/lib/RoleProvider";
+import MotionProvider from "@/components/providers/MotionProvider";
 
 export const metadata: Metadata = {
   title: "Trạm Bản — Cảnh báo thiên tai Điện Biên",
@@ -23,16 +24,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className="h-full">
+    <html lang="vi" className="h-full" data-scroll-behavior="smooth">
       <body
         className="min-h-full flex flex-col bg-bg text-ink antialiased"
         suppressHydrationWarning
       >
-        <RoleProvider>
-          <TopNav />
-          <div className="flex-1 pb-20 lg:pb-0">{children}</div>
-          <BottomNav />
-        </RoleProvider>
+        <MotionProvider>
+          <RoleProvider>
+            <TopNav />
+            <div className="flex-1 pb-20 lg:pb-0">{children}</div>
+            <BottomNav />
+          </RoleProvider>
+        </MotionProvider>
       </body>
     </html>
   );

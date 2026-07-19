@@ -46,6 +46,7 @@ export default function TextChat({
           onDelta(chunk.text as string);
         } else if (chunk.type === "error") {
           onError((chunk.message as string) || "Có lỗi xảy ra");
+          return;
         }
       }
       onTurnComplete(full);

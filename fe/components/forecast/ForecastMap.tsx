@@ -23,6 +23,30 @@ function metricValue(row: MapCommuneDay, metric: "temp" | "precip" | "risk"): nu
   return (row.temp_max_c + row.temp_min_c) / 2;
 }
 
+function fillColorExpression(metric: "temp" | "precip" | "risk"): maplibregl.ExpressionSpecification {
+  if (metric === "risk") {
+    return [
+      "match",
+      ["get", "risk_level"],
+      0,
+      RISK_COLOR_HEX[0],
+      1,
+      RISK_COLOR_HEX[1],
+      2,
+      RISK_COLOR_HEX[2],
+      3,
+      RISK_COLOR_HEX[3],
+      RISK_COLOR_HEX[0],
+    ] as maplibregl.ExpressionSpecification;
+  }
+  return [
+    "interpolate",
+    ["linear"],
+    ["get", "value_norm"],
+    ...buildMapLibreStops(metric === "temp" ? TEMP_MAPLIBRE_STOPS : PRECIP_MAPLIBRE_STOPS),
+  ] as maplibregl.ExpressionSpecification;
+}
+
 export default function ForecastMap({
   provinceGeoJson,
   communesGeoJson,
@@ -49,11 +73,13 @@ export default function ForecastMap({
   const hoveredIdRef = useRef<string | null>(null);
   const valueByCommuneRef = useRef(valueByCommune);
   const onCommuneClickRef = useRef(onCommuneClick);
+  const metricRef = useRef(metric);
 
   useEffect(() => {
     valueByCommuneRef.current = valueByCommune;
     onCommuneClickRef.current = onCommuneClick;
-  }, [valueByCommune, onCommuneClick]);
+    metricRef.current = metric;
+  }, [metric, valueByCommune, onCommuneClick]);
 
   // Create the map once.
   useEffect(() => {
@@ -100,27 +126,7 @@ export default function ForecastMap({
         type: "fill",
         source: "communes",
         paint: {
-          "fill-color":
-            metric === "risk"
-              ? [
-                  "match",
-                  ["get", "risk_level"],
-                  0,
-                  RISK_COLOR_HEX[0],
-                  1,
-                  RISK_COLOR_HEX[1],
-                  2,
-                  RISK_COLOR_HEX[2],
-                  3,
-                  RISK_COLOR_HEX[3],
-                  RISK_COLOR_HEX[0],
-                ]
-              : [
-                  "interpolate",
-                  ["linear"],
-                  ["get", "value_norm"],
-                  ...buildMapLibreStops(metric === "temp" ? TEMP_MAPLIBRE_STOPS : PRECIP_MAPLIBRE_STOPS),
-                ],
+          "fill-color": fillColorExpression(metric),
           "fill-opacity": [
             "case",
             ["==", ["get", "dimmed"], true],
@@ -200,11 +206,12 @@ export default function ForecastMap({
         map.getCanvas().style.cursor = "pointer";
         const row = valueByCommuneRef.current[id];
         const name = (feature.properties?.name as string) || "";
+        const activeMetric = metricRef.current;
         const valueLabel = row
-          ? metric === "risk"
+          ? activeMetric === "risk"
             ? row.risk.label
-            : metricValue(row, metric) != null
-              ? `${metricValue(row, metric)}${UNIT[metric]}`
+            : metricValue(row, activeMetric) != null
+              ? `${metricValue(row, activeMetric)}${UNIT[activeMetric]}`
               : null
           : null;
         popup
@@ -235,7 +242,8 @@ export default function ForecastMap({
       });
 
       loadedRef.current = true;
-      applyState();
+      applyDataState();
+      applyViewport();
     });
 
     return () => {
@@ -276,7 +284,7 @@ export default function ForecastMap({
     };
   }
 
-  function applyState() {
+  function applyDataState() {
     const map = mapRef.current;
     if (!map || !loadedRef.current) return;
 
@@ -284,8 +292,14 @@ export default function ForecastMap({
     if (source) {
       source.setData(decorate(communesGeoJson, valueByCommune, metric, domain));
     }
+    map.setPaintProperty("communes-fill", "fill-color", fillColorExpression(metric));
 
     map.setFilter("focus-outline", ["==", ["get", "id"], scope === "commune" ? focusCommuneId : ""]);
+  }
+
+  function applyViewport() {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current) return;
 
     const targetBBox =
       scope === "commune"
@@ -303,9 +317,14 @@ export default function ForecastMap({
   }
 
   useEffect(() => {
-    applyState();
+    applyDataState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metric, scope, focusCommuneId, valueByCommune, domain]);
+
+  useEffect(() => {
+    applyViewport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, focusCommuneId, provinceGeoJson, communesGeoJson]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }

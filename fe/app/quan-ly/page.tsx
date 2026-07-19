@@ -7,7 +7,7 @@ async function loadHome(communeId?: string) {
   const { default_commune_id, communes } = await fetchCommunes();
   const heroCommuneId = communeId && communes.some((c) => c.id === communeId) ? communeId : default_commune_id;
   const commune = communes.find((c) => c.id === heroCommuneId) ?? communes[0];
-  const forecast = await fetchForecast(commune.id, 1);
+  const forecast = await fetchForecast(commune.id, 5);
   return { communes, defaultCommuneId: default_commune_id, commune, forecast };
 }
 
@@ -18,23 +18,18 @@ export default async function OfficerPage({
 }) {
   const { commune: communeParam } = await searchParams;
 
-  let home: Awaited<ReturnType<typeof loadHome>> | null = null;
-  try {
-    home = await loadHome(communeParam);
-  } catch {
-    home = null;
-  }
-
-  let notifications: Awaited<ReturnType<typeof fetchNotifications>> = [];
-  let notifyError = false;
-  try {
-    notifications = await fetchNotifications(30);
-  } catch {
-    notifyError = true;
-  }
+  const [homeResult, notificationsResult] = await Promise.allSettled([
+    loadHome(communeParam),
+    fetchNotifications(30),
+  ]);
+  const home = homeResult.status === "fulfilled" ? homeResult.value : null;
+  const notifications = notificationsResult.status === "fulfilled" ? notificationsResult.value : [];
+  const notifyError = notificationsResult.status === "rejected";
 
   const communes: Commune[] = home?.communes ?? [];
-  const focusCommuneId = communeParam && communes.some((c) => c.id === communeParam) ? communeParam : home?.defaultCommuneId;
+  const focusCommuneId = communeParam && communes.some((c) => c.id === communeParam)
+    ? communeParam
+    : undefined;
 
   if (!home) {
     return (

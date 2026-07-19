@@ -11,6 +11,11 @@ export const RESIDENT_NAV_ITEMS: NavItem[] = [
   { href: "/quan-ly", label: "Cán bộ xã", icon: "map", kind: "route" },
 ];
 
+export const RESIDENT_GUEST_NAV_ITEMS: NavItem[] = [
+  { href: "/", label: "Trang chủ", icon: "home", kind: "route" },
+  { href: "/quan-ly", label: "Dành cho cán bộ", icon: "map", kind: "route" },
+];
+
 export const ADMIN_NAV_ITEMS: NavItem[] = [
   { href: "/admin", label: "Quản trị", icon: "user", kind: "route" },
   { href: "/", label: "Trang người dân", icon: "home", kind: "route" },

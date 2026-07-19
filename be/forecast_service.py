@@ -137,7 +137,8 @@ def _hazard_from_record(
 
 async def _get_weather(commune_id: str, days: int) -> dict:
     cached = _weather_cache.get(commune_id, config.WEATHER_CACHE_MINUTES * 60)
-    if cached is not None:
+    cached_days = len(cached.get("forecast", {}).get("daily", [])) if cached else 0
+    if cached is not None and cached_days >= days:
         return cached
     commune = communes.COMMUNES_BY_ID[commune_id]
     data = await asyncio.to_thread(
@@ -225,6 +226,7 @@ def _build_day_entry(
         "landslide": landslide,
         "flash_flood": flash_flood,
         "hazards": hazards,
+        "confidence": day.get("confidence"),
     }
 
 
@@ -261,8 +263,12 @@ async def get_commune_forecast(commune_id: str, days: int = config.FORECAST_DAYS
     commune = communes.COMMUNES_BY_ID[commune_id]
 
     cached_advisory = _advisory_cache.get(commune_id, config.ADVISORY_CACHE_MINUTES * 60)
-    if cached_advisory is not None:
-        return cached_advisory
+    cached_days = len(cached_advisory.get("forecast", [])) if cached_advisory else 0
+    if cached_advisory is not None and cached_days >= days:
+        return {
+            **cached_advisory,
+            "forecast": cached_advisory.get("forecast", [])[:days],
+        }
 
     try:
         result = await asyncio.to_thread(_agent.run, commune["name"], None, days, commune["lat"], commune["lon"])
@@ -306,6 +312,7 @@ def _from_advisory(commune: dict, payload: dict) -> dict:
             "landslide": day.get("landslide"),
             "flash_flood": day.get("flash_flood"),
             "hazards": _day_hazard_tags(day),
+            "confidence": day.get("confidence"),
         }
         for index, day in enumerate(payload.get("daily_forecast", []))
     ]
@@ -430,7 +437,7 @@ async def _fallback_forecast(commune: dict, days: int) -> dict:
     }
 
 
-async def warm_caches(days: int = config.FORECAST_DAYS, concurrency: int = 8) -> None:
+async def warm_caches(days: int = config.FORECAST_DAYS, concurrency: int = 4) -> None:
     """Refreshes the landslide snapshot and every commune's weather. Cheap
     (no LLM); safe to run on a timer. Does NOT touch the advisory cache."""
     try:
