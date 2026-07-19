@@ -297,24 +297,22 @@ Lệnh gọi đa mô hình này được thực hiện độc lập, không phá
 
 ### 2.3.3. Thử nghiệm offline: hiệu chỉnh theo địa hình và bài học từ một thất bại có kiểm soát
 
-Dữ liệu thời tiết thô — kể cả từ Open-Meteo — vẫn là một giá trị đại diện cho cả một vùng lưới rộng, trong khi thực tế một xã ở Điện Biên có thể có chênh lệch độ cao hàng trăm mét giữa trung tâm xã và các bản xa. Trạm Bản xây dựng một lớp hiệu chỉnh riêng (terrain correction), tận dụng chính phần dữ liệu **có ground-truth thật** để huấn luyện và đánh giá — không suy đoán.
+Dữ liệu mô hình vẫn đại diện cho một ô lưới rộng, trong khi Điện Biên có chênh lệch địa hình lớn giữa các xã và các bản. Repo vì vậy có một pipeline residual correction **tách hoàn toàn khỏi runtime** tại `research/weather_downscaling/`: tải dữ liệu, kiểm tra null/schema, cache theo request, ghép timestamp, chọn điểm phủ không gian, train ridge model, đánh giá theo thời gian và địa điểm, rồi sinh manifest/checksum/model card tự động.
 
-**Thu thập dữ liệu.** Với cả 45 xã/phường, hệ thống lấy 1 năm dữ liệu lịch sử (Open-Meteo Historical Weather API) song song hai chuỗi: giá trị mô hình mặc định của Open-Meteo ("raw") và một nguồn tái phân tích (reanalysis) độc lập làm ground-truth — ERA5-Land (~9km) cho nhiệt độ. Khi thử áp dụng quy trình tương tự cho lượng mưa, nhóm phát hiện bằng thực nghiệm rằng **ERA5-Land không cung cấp `precipitation_sum` trên Open-Meteo** (luôn trả về rỗng, cả theo ngày lẫn theo giờ); ground-truth cho mưa vì vậy phải chuyển sang ERA5 thường (~25–31km, thô hơn), một khác biệt về độ phân giải được ghi nhận công khai thay vì che giấu. Độ cao thật của từng xã lấy qua Open-Meteo Elevation API.
+**Nguồn và kiểm soát leakage.** Input là output GFS Global lịch sử (~13 km) từ Open-Meteo Historical Forecast API; reference cho nhiệt độ và độ ẩm là ERA5-Land (~11 km). ERA5-Land là reanalysis/reference, không được gọi là quan trắc hay ground truth tuyệt đối. Pipeline đặt `elevation=nan` và `cell_selection=nearest` để tắt statistical downscaling sẵn có của provider; nếu không, input đã được hiệu chỉnh độ cao trước khi train và kết quả sẽ bị đánh giá quá lạc quan. Mưa, gió và cloud dùng ERA5 để đối chiếu vì các trường tương ứng của ERA5-Land trả `null` qua API. Một thử nghiệm ban đầu với `gfs025` cũng bị loại tự động vì nhiều trường bề mặt trả `null` tại Điện Biên; pipeline chỉ chuyển sang `gfs_global` sau kiểm tra dữ liệu thật.
 
-**Huấn luyện.** Với dữ liệu dạng `[độ cao, tháng] → phần dư (residual = ground-truth − raw)`, một mô hình hồi quy tuyến tính (OLS, tháng mã hoá dạng chu kỳ sin/cos) được huấn luyện — quan hệ nhiệt độ/độ cao vốn gần tuyến tính (lapse rate), không cần một mô hình phức tạp hơn.
+**Smoke evaluation có thể tái lập.** Artifact đang commit dùng 21.600 dòng giờ, 10 centroid phủ Điện Biên trong giai đoạn 01/01–31/03/2025. Mô hình chỉ fit trên 8 điểm trước 15/02; 2 điểm spatial holdout chưa từng xuất hiện khi fit. Đây là bản kiểm tra pipeline ngắn hạn, chưa phải kiểm định khí hậu nhiều năm.
 
-**Kiểm định — vòng lặp thất bại rồi sửa đúng cách.** Lần thử đầu tiên chọn tay 10 xã có độ cao trải đều (8 xã huấn luyện, 2 xã giữ lại kiểm tra hoàn toàn tách biệt về mặt không gian — spatial holdout). Kết quả: MAE trên tập huấn luyện cải thiện, nhưng trên 2 xã chưa từng thấy, hiệu chỉnh lại **làm dự báo tệ đi** — bằng chứng cho thấy 10 điểm là quá ít để học một hệ số tổng quát hoá được, và một phép kiểm tra ngẫu nhiên theo thời gian (thay vì theo vị trí) đáng lẽ sẽ che giấu mất vấn đề này. Nhóm mở rộng dữ liệu huấn luyện ra toàn bộ 45 xã (36 xã huấn luyện, 9 xã giữ lại kiểm tra, chọn hệ thống theo từng bậc độ cao), thu được kết quả tổng quát hoá tốt:
+| Biến / tập kiểm tra | MAE GFS gốc | MAE sau hiệu chỉnh | Skill MAE |
+|---|---:|---:|---:|
+| Nhiệt độ — temporal holdout | 2,1510°C | 2,0465°C | 4,86% |
+| Nhiệt độ — spatial + temporal holdout | 2,3369°C | 1,7777°C | **23,93%** |
+| Độ ẩm — temporal holdout | 15,8980 điểm % | 11,1172 điểm % | **30,07%** |
+| Độ ẩm — spatial + temporal holdout | 17,6273 điểm % | 12,3062 điểm % | **30,19%** |
 
-| Tập | MAE trước hiệu chỉnh | MAE sau hiệu chỉnh |
-|---|---|---|
-| Huấn luyện (36 xã) | 0,654°C | 0,598°C |
-| Kiểm tra (9 xã, chưa từng huấn luyện) | 0,759°C | **0,681°C (giảm 10,3%)** |
+Code trích `elevation/slope/aspect/TPI/delta_h` từ SRTM GL1 30 m bằng `rasterio` đã có sẵn, nhưng artifact hiện tại chưa giả vờ đã dùng SRTM: manifest ghi rõ `open_meteo_elevation_90m_fallback`, còn slope/aspect/TPI bằng 0 cho đến khi team cung cấp GeoTIFF. Dataset/cache lớn không commit; manifest lưu SHA-256 để tái lập và đối chiếu.
 
-Với lượng mưa, cùng quy trình cho kết quả **âm tính rõ ràng**: hệ số độ cao gần như bằng 0 và MAE sau hiệu chỉnh tệ hơn trước hiệu chỉnh ở cả tập huấn luyện lẫn toàn bộ 9/9 xã kiểm tra — phản ánh đúng bản chất vật lý (mưa mang tính đối lưu/cục bộ, không tuân theo quy luật độ cao rõ ràng như nhiệt độ) và việc ground-truth mưa vốn đã thô hơn. Theo đúng nguyên tắc AI Safety xuyên suốt dự án, nhóm **quyết định không đưa hiệu chỉnh mưa vào sản phẩm** — bản đồ lượng mưa vẫn hiển thị nhưng gắn nhãn rõ là giá trị gốc, chưa hiệu chỉnh địa hình, thay vì gắn cho nó một độ chính xác không có thật.
-
-**Trạng thái triển khai.** Thử nghiệm chứng minh hướng hiệu chỉnh nhiệt độ có tiềm năng, nhưng module này chưa được tích hợp vào backend production hiện tại. Sản phẩm đang hiển thị dữ liệu gốc từ Open-Meteo và chỉ đưa ensemble confidence vào runtime. Việc tách rõ kết quả nghiên cứu offline khỏi tính năng đang chạy giúp tránh tạo cảm giác chính xác giả khi chưa hoàn thành kiểm định vận hành liên tục.
-
-Kết quả và bộ dữ liệu thử nghiệm được giữ làm cơ sở cho giai đoạn tiếp theo; chúng chưa được dùng để thay đổi giá trị nhiệt độ hiển thị cho người dân hoặc cán bộ trong bản demo production.
+**Safety gate.** Dù smoke evaluation cải thiện MAE, artifact luôn đặt `accepted_for_runtime=false`. Bản demo production vẫn dùng dữ liệu Open-Meteo và ensemble confidence ở mục 2.3.2. Muốn đưa model vào cảnh báo cần thêm Previous Runs/Single Runs để đánh giá theo forecast lead-time, dữ liệu trạm, kiểm định mùa mưa, calibration và phê duyệt nghiệp vụ. Ranh giới này biến “chưa đủ bằng chứng” thành một trạng thái kỹ thuật cưỡng chế được, thay vì chỉ là lời cảnh báo trong tài liệu.
 
 ## 2.4. Module sinh nội dung cảnh báo bằng AI
 
@@ -438,7 +436,7 @@ Như đã trình bày ở mục 1.5, việc phát triển AI cho tiếng H'Mông
 
 Trạm Bản đã chứng minh được tính khả thi của một mô hình cảnh báo thiên tai kết hợp ba yếu tố hiếm khi xuất hiện cùng nhau trong một sản phẩm duy nhất: (1) dữ liệu thật, có độ chi tiết đến từng xã, không phải dữ liệu mô phỏng để minh hoạ; (2) một trợ lý AI hội thoại giọng nói tiếng H'Mông xây dựng trên một mô hình ASR tự tinh chỉnh cho chính ngôn ngữ đó, thay vì phụ thuộc vào các API dịch thuật đa ngôn ngữ thương mại không hỗ trợ tiếng dân tộc; và (3) một quy trình ra quyết định rõ ràng, phân định đúng ranh giới giữa việc để AI tự động hành động (khi rủi ro đã đủ rõ ràng) và việc giữ con người trong vòng lặp quyết định (khi tình huống còn cần phán đoán tại chỗ).
 
-Về mặt nghiên cứu, quy trình xây dựng dữ liệu và tinh chỉnh ASR tiếng H'Mông (Whisper-small, WER 12,35% trên tập nội bộ) là một đóng góp có thể tái sử dụng độc lập với riêng bài toán thời tiết. Runtime hiện đã bổ sung cơ chế định lượng độ tin cậy dự báo dựa trên ensemble spread giữa ba mô hình NWP độc lập (2.3.2). Thử nghiệm hiệu chỉnh nhiệt độ theo địa hình đạt cải thiện MAE 10,3% trên spatial holdout nhưng được giữ ở trạng thái nghiên cứu offline, chưa được dùng để thay đổi dự báo production (2.3.3); nhánh hiệu chỉnh lượng mưa bị loại bỏ sau khi đo được kết quả tệ hơn dữ liệu gốc.
+Về mặt nghiên cứu, quy trình xây dựng dữ liệu và tinh chỉnh ASR tiếng H'Mông (Whisper-small, WER 12,35% trên tập nội bộ) là một đóng góp có thể tái sử dụng độc lập với riêng bài toán thời tiết. Runtime hiện đã bổ sung cơ chế định lượng độ tin cậy dự báo dựa trên ensemble spread giữa ba mô hình NWP độc lập (2.3.2). Pipeline residual correction offline có code, dataset manifest, checksum, temporal/spatial holdout và model card; smoke evaluation đạt skill MAE 23,93% cho nhiệt độ và 30,19% cho độ ẩm trên tập spatial + temporal holdout, nhưng vẫn bị khóa khỏi production bằng `accepted_for_runtime=false` (2.3.3).
 
 ## 4.2. Hướng phát triển
 
@@ -448,7 +446,7 @@ Về mặt nghiên cứu, quy trình xây dựng dữ liệu và tinh chỉnh AS
 
 **Cải thiện ASR/TTS.** Theo đúng phân tích ở mục 2.2.4, các hướng cải thiện cụ thể gồm: áp dụng tăng cường dữ liệu âm thanh (SpecAugment, thêm nhiễu tổng hợp, biến đổi tốc độ nói) để giảm khoảng cách domain shift; thu thập thêm dữ liệu từ nhiều miền và phương ngữ H'Mông khác nhau, không chỉ riêng âm thanh tôn giáo; và tích hợp một mô hình ngôn ngữ ở giai đoạn giải mã để cải thiện khả năng xử lý từ vựng ngoài tập huấn luyện (OOV).
 
-**Hiệu chỉnh địa hình cho lượng mưa.** Kết quả âm tính ở mục 2.3.3 không đóng lại hướng đi này, chỉ cho thấy cách tiếp cận tuyến tính đơn giản trên độ cao là chưa đủ. Các hướng khả thi tiếp theo: dùng đặc trưng địa hình phong phú hơn (độ dốc, hướng phơi, chỉ số vị trí địa hình TPI thay vì chỉ độ cao tuyệt đối), log-biến đổi lượng mưa trước khi hồi quy (do phân phối lệch mạnh, nhiều ngày giá trị 0), và mở rộng ground-truth sang một nguồn tái phân tích có độ phân giải cao hơn ERA5 khi Open-Meteo hỗ trợ.
+**Mở rộng hiệu chỉnh sang lượng mưa.** Smoke evaluation hiện chỉ train nhiệt độ và độ ẩm; mưa ERA5 được lưu để đối chiếu nhưng chưa được dùng làm target downscaling vì độ phân giải không cao hơn input đủ rõ ràng và phân phối mưa rất lệch, nhiều giờ bằng 0. Bước tiếp theo là bổ sung SRTM thật (độ dốc, hướng phơi, TPI), log/hurdle model cho mưa và nguồn reference hoặc trạm đo phù hợp hơn trước khi đánh giá.
 
 **Kho tri thức chuyên sâu (RAG).** Hiện tại, kiến thức về mùa vụ và khuyến nghị nông nghiệp của trợ lý đến từ khả năng suy luận chung của LLM nền tảng. Một hướng cải thiện tự nhiên là xây dựng một kho tri thức chuyên biệt về nông nghiệp và ứng phó thiên tai tại Điện Biên, kết hợp kiến trúc truy hồi tăng cường sinh (RAG) với một cơ sở dữ liệu vector, để câu trả lời không chỉ đúng về mặt ngôn ngữ mà còn chính xác tuyệt đối về khuyến nghị chuyên môn.
 
@@ -460,11 +458,11 @@ Về mặt nghiên cứu, quy trình xây dựng dữ liệu và tinh chỉnh AS
 
 | Tiêu chí | Nội dung liên quan trong báo cáo | Bằng chứng cụ thể |
 |---|---|---|
-| **Technical Implementation & Engineering Depth** | 2.2.3 (kiến trúc Whisper, fine-tuning), 2.2.2 (forced alignment), 2.3.2 (ensemble runtime), 2.3.3 (thử nghiệm downscaling offline), 2.5 (backend) | Bảng thông số kiến trúc mô hình, hyperparameter, kiểm thử tự động và kết quả spatial-holdout được phân biệt rõ với tính năng production |
+| **Technical Implementation & Engineering Depth** | 2.2.3 (kiến trúc Whisper, fine-tuning), 2.2.2 (forced alignment), 2.3.2 (ensemble runtime), 2.3.3 (pipeline residual correction), 2.5 (backend) | Code tải/ghép/train, cache, checksum, temporal + spatial holdout, model card và kiểm thử tự động; phân biệt rõ với production |
 | **AI-Native Architecture & Innovation** | 2.2.6 (pipeline hội thoại real-time, barge-in, sentence-level TTS streaming), 2.3.2 (confidence từ ensemble NWP), 2.3.3 (nghiên cứu địa hình chưa bật runtime) | Có tầng xử lý AI giữa dữ liệu thô và người dùng cuối, đồng thời công khai ranh giới giữa thử nghiệm và tính năng đang vận hành |
 | **Business Viability & Pilot Pathway** | Chương 3 trọn vẹn | Lộ trình 3 giai đoạn, đối tác cụ thể, cấu trúc chi phí, liên hệ chương trình khoa học công nghệ quốc gia (1.5, 3.4) |
 | **AI-Native UX & Design Thinking** | 2.6 (Zero-Literacy Design), 2.6.1 (video minh hoạ, vị trí cá nhân hoá), 2.6.2 (bản đồ tương tác) | Thiết kế phi văn bản xuyên suốt, không chỉ ở lớp giọng nói mà cả icon/màu/video/âm thanh |
-| **AI Safety, Grounding & Trust** | 2.2.7–2.2.8 (grounding + ràng buộc), 2.3.3 (chưa bật downscaling và loại bỏ hiệu chỉnh mưa sau kiểm định), 2.4 (constrained generation, chính sách phát cảnh báo) | Ưu tiên an toàn hơn “ấn tượng”: không quảng bá thử nghiệm offline như một tính năng production và công khai cả kết quả âm tính |
+| **AI Safety, Grounding & Trust** | 2.2.7–2.2.8 (grounding + ràng buộc), 2.3.3 (model card + runtime promotion gate), 2.4 (constrained generation, chính sách phát cảnh báo) | `accepted_for_runtime=false`, công khai nguồn reanalysis/fallback và yêu cầu forecast lead-time verification trước khi dùng model |
 
 ## 4.4. Lời kết
 

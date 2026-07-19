@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-19T03:41:32.676968+00:00",
+  "dataset_sha256": "e5c06c277a3245d9bec3e84d0064eea74b16504222a761c456c7840cb5b32ed7",
+  "temporal_cutoff_utc": "2025-02-15T00:00:00+00:00",
+  "spatial_holdout_point_ids": [
+    "19537811",
+    "19571209"
+  ],
+  "metrics": {
+    "temperature_2m": {
+      "train_fit": {
+        "n": 8640,
+        "baseline_mae": 1.8596,
+        "corrected_mae": 1.0595,
+        "baseline_rmse": 2.246,
+        "corrected_rmse": 1.3825,
+        "corrected_bias": 0.0,
+        "mae_skill_percent": 43.03
+      },
+      "temporal_holdout": {
+        "n": 8640,
+        "baseline_mae": 2.151,
+        "corrected_mae": 2.0465,
+        "baseline_rmse": 2.9325,
+        "corrected_rmse": 2.6135,
+        "corrected_bias": 1.5046,
+        "mae_skill_percent": 4.86
+      },
+      "spatial_holdout_all": {
+        "n": 4320,
+        "baseline_mae": 2.1481,
+        "corrected_mae": 1.426,
+        "baseline_rmse": 2.7994,
+        "corrected_rmse": 1.9659,
+        "corrected_bias": 0.4556,
+        "mae_skill_percent": 33.62
+      },
+      "spatiotemporal_holdout": {
+        "n": 2160,
+        "baseline_mae": 2.3369,
+        "corrected_mae": 1.7777,
+        "baseline_rmse": 3.1564,
+        "corrected_rmse": 2.4036,
+        "corrected_bias": 1.2154,
+        "mae_skill_percent": 23.93
+      }
+    },
+    "relative_humidity_2m": {
+      "train_fit": {
+        "n": 8640,
+        "baseline_mae": 9.8926,
+        "corrected_mae": 5.6077,
+        "baseline_rmse": 12.3629,
+        "corrected_rmse": 7.1636,
+        "corrected_bias": -0.0005,
+        "mae_skill_percent": 43.31
+      },
+      "temporal_holdout": {
+        "n": 8640,
+        "baseline_mae": 15.898,
+        "corrected_mae": 11.1172,
+        "baseline_rmse": 19.6547,
+        "corrected_rmse": 14.0555,
+        "corrected_bias": 8.1418,
+        "mae_skill_percent": 30.07
+      },
+      "spatial_holdout_all": {
+        "n": 4320,
+        "baseline_mae": 14.1891,
+        "corrected_mae": 9.0889,
+        "baseline_rmse": 18.1026,
+        "corrected_rmse": 12.0524,
+        "corrected_bias": 4.9833,
+        "mae_skill_percent": 35.94
+      },
+      "spatiotemporal_holdout": {
+        "n": 2160,
+        "baseline_mae": 17.6273,
+        "corrected_mae": 12.3062,
+        "baseline_rmse": 21.726,
+        "corrected_rmse": 15.3286,
+        "corrected_bias": 8.885,
+        "mae_skill_percent": 30.19
+      }
+    }
+  },
+  "promotion_gates": {
+    "temperature_2m": {
+      "accepted_for_runtime": false,
+      "research_gate_passed": true,
+      "checks": {
+        "temporal_holdout": true,
+        "spatiotemporal_holdout": true
+      },
+      "note": "Runtime promotion requires separate operational forecast verification and safety review."
+    },
+    "relative_humidity_2m": {
+      "accepted_for_runtime": false,
+      "research_gate_passed": true,
+      "checks": {
+        "temporal_holdout": true,
+        "spatiotemporal_holdout": true
+      },
+      "note": "Runtime promotion requires separate operational forecast verification and safety review."
+    }
+  }
+}

@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-19T03:41:32.676968+00:00",
+  "purpose": "offline_research_only",
+  "accepted_for_runtime": false,
+  "dataset_sha256": "e5c06c277a3245d9bec3e84d0064eea74b16504222a761c456c7840cb5b32ed7",
+  "temporal_cutoff_utc": "2025-02-15T00:00:00+00:00",
+  "spatial_holdout_point_ids": [
+    "19537811",
+    "19571209"
+  ],
+  "training_rows": 8640,
+  "ridge_alpha": 0.1,
+  "feature_names": [
+    "raw_temperature_2m",
+    "raw_relative_humidity_2m",
+    "raw_precipitation",
+    "raw_wind_speed_10m",
+    "raw_wind_gusts_10m",
+    "raw_cloud_cover",
+    "latitude",
+    "longitude",
+    "elevation_m",
+    "orographic_delta_m",
+    "slope_deg",
+    "aspect_sin",
+    "aspect_cos",
+    "tpi_m",
+    "delta_h_m",
+    "hour_sin",
+    "hour_cos",
+    "doy_sin",
+    "doy_cos"
+  ],
+  "feature_means": [
+    15.07957175925926,
+    66.46747685185187,
+    0.0035416666666666695,
+    4.1775925925925845,
+    6.37827546296295,
+    35.81620370370364,
+    21.581903750000095,
+    103.13619374999999,
+    663.0000000000022,
+    -219.37500000000017,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    -1.0174559762418656e-17,
+    -5.687995647402078e-17,
+    0.3605539554677946,
+    0.9060951389678354
+  ],
+  "feature_standard_deviations": [
+    6.053265173712764,
+    21.938735638718,
+    0.035113667886106426,
+    1.9076151281152671,
+    4.826095676591536,
+    41.82316624557644,
+    0.3536089902232684,
+    0.27226270973153205,
+    212.49759127891403,
+    166.69418243366732,
+    1e-09,
+    1e-09,
+    1e-09,
+    1e-09,
+    1e-09,
+    0.7071477052703385,
+    0.7071477052703378,
+    0.20480577249361442,
+    0.08398042013977514
+  ],
+  "models": {
+    "temperature_2m": {
+      "kind": "ridge_residual_correction",
+      "intercept": -0.09476851851858026,
+      "coefficients": [
+        -1.2882358672100622,
+        0.0028354909252235327,
+        0.0008589590217039653,
+        -0.040549586945237005,
+        -0.17764397303646426,
+        -0.3142694176099999,
+        -0.2141555990245732,
+        0.08303032818516058,
+        -0.21602428481784614,
+        0.08384774939469324,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.50820794926659,
+        -0.4584768047698883,
+        -0.10880852546058106,
+        -0.3572587581300078
+      ],
+      "prediction": "corrected_temperature_2m = raw_temperature_2m + predicted_residual",
+      "promotion_gate": {
+        "accepted_for_runtime": false,
+        "research_gate_passed": true,
+        "checks": {
+          "temporal_holdout": true,
+          "spatiotemporal_holdout": true
+        },
+        "note": "Runtime promotion requires separate operational forecast verification and safety review."
+      }
+    },
+    "relative_humidity_2m": {
+      "kind": "ridge_residual_correction",
+      "intercept": 5.019444444444837,
+      "coefficients": [
+        2.2860707826263362,
+        -11.252694282284054,
+        -0.5999617740771115,
+        0.47592149886286916,
+        -2.7820035899003948,
+        0.5536045579694924,
+        1.462903453020985,
+        -0.11652571907809608,
+        0.46458336631599306,
+        0.02467040270040987,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -5.626389380349262,
+        3.6744621027827646,
+        -1.6385553914454345,
+        -2.5676370206548436
+      ],
+      "prediction": "corrected_relative_humidity_2m = raw_relative_humidity_2m + predicted_residual",
+      "promotion_gate": {
+        "accepted_for_runtime": false,
+        "research_gate_passed": true,
+        "checks": {
+          "temporal_holdout": true,
+          "spatiotemporal_holdout": true
+        },
+        "note": "Runtime promotion requires separate operational forecast verification and safety review."
+      }
+    }
+  }
+}

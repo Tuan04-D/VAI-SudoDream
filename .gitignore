@@ -24,3 +24,10 @@ next-env.d.ts
 Thumbs.db
 .vscode/
 .idea/
+
+# Offline weather research (large/reproducible local data)
+research/weather_downscaling/data/raw/
+research/weather_downscaling/data/processed/
+research/weather_downscaling/data/terrain_features.csv
+research/weather_downscaling/**/*.tif
+research/weather_downscaling/**/*.tiff

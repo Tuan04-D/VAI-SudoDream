@@ -72,3 +72,12 @@ Rules:
   multiple API replicas.
 - Add Redis only when measurements justify distributed cache/rate limiting.
 - Extract SMS/video into separate deployments without changing browser APIs.
+
+## Research boundary
+
+`research/` là vùng thử nghiệm reproducible, không nằm trong dependency graph
+của `be/`, `fe/` hay `ai/`. Pipeline weather downscaling được phép tải dataset,
+train model và sinh model card nhưng artifact luôn mang
+`accepted_for_runtime=false`. Muốn đưa model vào backend phải có adapter riêng,
+contract test, đánh giá forecast lead-time, calibration và phê duyệt nghiệp vụ;
+việc chỉ đạt metric offline không tự động cho phép phát cảnh báo.

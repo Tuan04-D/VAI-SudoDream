@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "purpose": "offline_research_only",
+  "start_date": "2025-01-01",
+  "end_date": "2025-03-31",
+  "hourly_rows": 21600,
+  "points": [
+    {
+      "id": "19571212",
+      "name": "Xã Mường Pồn",
+      "lat": 21.5931,
+      "lon": 103.0322
+    },
+    {
+      "id": "19537811",
+      "name": "Xã Sín Thầu",
+      "lat": 22.37975,
+      "lon": 102.29299
+    },
+    {
+      "id": "19571214",
+      "name": "Xã Mường Nhà",
+      "lat": 21.00889,
+      "lon": 103.16284
+    },
+    {
+      "id": "19571186",
+      "name": "Xã Tủa Thàng",
+      "lat": 22.00574,
+      "lon": 103.42882
+    },
+    {
+      "id": "19571197",
+      "name": "Xã Quảng Lâm",
+      "lat": 21.99562,
+      "lon": 102.61143
+    },
+    {
+      "id": "19571198",
+      "name": "Xã Quài Tở",
+      "lat": 21.55225,
+      "lon": 103.46687
+    },
+    {
+      "id": "19571210",
+      "name": "Xã Mường Tùng",
+      "lat": 21.94571,
+      "lon": 103.08145
+    },
+    {
+      "id": "19571216",
+      "name": "Xã Mường Luân",
+      "lat": 21.24768,
+      "lon": 103.38482
+    },
+    {
+      "id": "19571189",
+      "name": "Xã Thanh Yên",
+      "lat": 21.30624,
+      "lon": 102.92112
+    },
+    {
+      "id": "19571209",
+      "name": "Xã Nà Bủng",
+      "lat": 21.72187,
+      "lon": 102.71429
+    }
+  ],
+  "point_count": 10,
+  "input": {
+    "provider": "Open-Meteo Historical Forecast API",
+    "model": "gfs_global",
+    "nominal_resolution": "0.11 degree (~13 km)",
+    "statistical_downscaling_disabled": true
+  },
+  "reference": {
+    "temperature_2m": "ERA5-Land 0.1 degree (~11 km)",
+    "relative_humidity_2m": "ERA5-Land 0.1 degree (~11 km)",
+    "wind_gusts_10m": "ERA5 0.25 degree (~25 km; comparison only)",
+    "precipitation": "ERA5 0.25 degree (~25 km; comparison only)",
+    "wind_speed_10m": "ERA5 0.25 degree (~25 km; comparison only)",
+    "cloud_cover": "ERA5 0.25 degree (~25 km; comparison only)"
+  },
+  "terrain_source": "open_meteo_elevation_90m_fallback",
+  "boundary_source": "project OSM-derived post-2025 commune registry",
+  "output": "data\\processed\\hourly_pairs.csv.gz",
+  "sha256": "e5c06c277a3245d9bec3e84d0064eea74b16504222a761c456c7840cb5b32ed7"
+}
