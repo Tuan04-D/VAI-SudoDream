@@ -1,21 +1,31 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect } from "react";
-import { IconShieldCheck } from "@tabler/icons-react";
-import RiskHeroCard from "@/components/home/RiskHeroCard";
-import HeroVideo from "@/components/home/HeroVideo";
-import Section from "@/components/layout/Section";
-import ForecastSection from "@/components/forecast/ForecastSection";
-import NotificationsSection from "@/components/notifications/NotificationsSection";
-import ChatSection from "@/components/chat/ChatSection";
-import ResidentViewMapSection from "@/components/officer/ResidentViewMapSection";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  IconAlertTriangle,
+  IconBellRinging,
+  IconBuildingCommunity,
+  IconChevronDown,
+  IconCloud,
+  IconCloudRain,
+  IconDownload,
+  IconDroplet,
+  IconEye,
+  IconFileReport,
+  IconMapPin,
+  IconRefresh,
+  IconSpeakerphone,
+  IconUsers,
+  IconWind,
+} from "@tabler/icons-react";
+import FloatingChatWidget from "@/components/chat/FloatingChatWidget";
 import PhoneAuthForm from "@/components/auth/PhoneAuthForm";
+import WeatherIcon, {
+  FlashFloodIcon,
+  LandslideIcon,
+} from "@/components/ui/WeatherIcon";
 import { useRole } from "@/lib/RoleProvider";
-<<<<<<< Updated upstream
-import { loginOfficial, registerOfficial } from "@/lib/api";
-import type { Commune, CommuneForecast, NotificationItem } from "@/lib/types";
-=======
 import { RISK_TEXT_CLASS } from "@/lib/risk";
 import {
   fetchForecast,
@@ -55,18 +65,11 @@ function windDirection(degrees: number | null) {
   const directions = ["Bắc", "Đông Bắc", "Đông", "Đông Nam", "Nam", "Tây Nam", "Tây", "Tây Bắc"];
   return directions[Math.round(degrees / 45) % 8];
 }
->>>>>>> Stashed changes
 
 function OfficialGate({ communes }: { communes: Commune[] }) {
   const { setOfficial } = useRole();
   const defaultCommuneId = communes[0]?.id ?? "";
   return (
-<<<<<<< Updated upstream
-    <div className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center gap-5 px-5 py-16">
-      <div className="text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <IconShieldCheck className="h-9 w-9" stroke={1.8} />
-=======
     <main className="bg-contour min-h-[calc(100dvh-74px)] bg-bg px-5 py-12">
       <div className="mx-auto grid min-h-[70vh] max-w-4xl items-center gap-8 lg:grid-cols-[1fr_420px]">
         <div className="hidden lg:block">
@@ -99,24 +102,8 @@ function OfficialGate({ communes }: { communes: Commune[] }) {
               onDone={setOfficial}
             />
           </div>
->>>>>>> Stashed changes
         </div>
-        <h1 className="mt-3 font-display text-xl font-bold">Cán bộ xã</h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          Đăng nhập bằng số điện thoại để xem bản đồ rủi ro, bản tin AI và tình trạng người dân đã xem cảnh báo.
-        </p>
       </div>
-<<<<<<< Updated upstream
-      <div className="card p-5">
-        <PhoneAuthForm
-          communes={communes}
-          defaultCommuneId={defaultCommuneId}
-          communeLabel="Xã bạn quản lý"
-          onLogin={loginOfficial}
-          onRegister={registerOfficial}
-          onDone={setOfficial}
-        />
-=======
     </main>
   );
 }
@@ -141,14 +128,11 @@ function WeatherStat({
         <p className="text-[11px] text-ink-muted">{label}</p>
         <p className="font-data truncate text-[15px] font-bold text-ink">{value}</p>
         {detail && <p className="truncate text-[10px] text-ink-muted">{detail}</p>}
->>>>>>> Stashed changes
       </div>
     </div>
   );
 }
 
-<<<<<<< Updated upstream
-=======
 function WeatherCard({ forecast, day, isToday }: { forecast: CommuneForecast; day: DayForecast | undefined; isToday: boolean }) {
   const current = forecast.current;
   if (isToday) {
@@ -462,96 +446,85 @@ function RainfallChart({ days }: { days: DayForecast[] }) {
   );
 }
 
->>>>>>> Stashed changes
 function DashboardBody({
-  communes,
-  notifications,
-  notifyError,
   home,
-  focusCommuneId,
-  defaultCommuneId,
+  communes,
+  onCommuneChange,
 }: {
+  home: { commune: Commune; forecast: CommuneForecast };
   communes: Commune[];
-  notifications: NotificationItem[];
-  notifyError: boolean;
-  home: { commune: Commune; forecast: CommuneForecast } | null;
-  focusCommuneId?: string;
-  defaultCommuneId: string;
+  onCommuneChange: (communeId: string) => void;
 }) {
   const { official } = useRole();
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const [daySelection, setDaySelection] = useState({ communeId: home.commune.id, day: 0 });
+  const [sending, setSending] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    if (official && !searchParams.get("commune") && official.commune_id !== defaultCommuneId) {
-      router.replace(`/quan-ly?commune=${official.commune_id}#top`);
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const selectedDay = daySelection.communeId === home.commune.id ? daySelection.day : 0;
+  const selectedForecast = home.forecast.forecast.find((day) => day.day_index === selectedDay) ?? home.forecast.forecast[0];
+  const updateLabel = (() => {
+    const time = home.forecast.current?.time;
+    if (!time) return "Chưa rõ thời gian cập nhật";
+    const parsed = new Date(time);
+    return `Cập nhật lúc ${new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" }).format(parsed)}`;
+  })();
+  const isAssignedCommune = official?.commune_id === home.commune.id;
+
+  async function handleSendAlert() {
+    if (!official || !isAssignedCommune) {
+      setToast("Bạn có thể xem thời tiết xã này nhưng chỉ được phát cảnh báo tại xã mình quản lý.");
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [official]);
+    if (!window.confirm(`Phát cảnh báo mới tới người dân tại ${home.commune.name}?`)) return;
+    setSending(true);
+    try {
+      await sendOfficerAlert(home.commune.id, official?.id);
+      setToast("Đã phát cảnh báo tới người dân trong xã.");
+    } catch {
+      setToast("Không phát được cảnh báo. Có thể nội dung mới trùng với cảnh báo gần nhất.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function exportReport() {
+    const header = ["Ngày", "Điều kiện", "Nhiệt độ thấp nhất (°C)", "Nhiệt độ cao nhất (°C)", "Lượng mưa (mm)", "Xác suất mưa (%)", "Mức rủi ro"];
+    const lines = home.forecast.forecast.map((day) => [
+      day.date,
+      day.condition ?? "",
+      day.temp_min_c ?? "",
+      day.temp_max_c ?? "",
+      day.rain_sum_mm ?? "",
+      day.rain_probability_max_percent ?? "",
+      day.risk.label,
+    ]);
+    const escapeCell = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
+    const csv = `\uFEFF${[header, ...lines].map((row) => row.map(escapeCell).join(",")).join("\r\n")}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `bao-cao-${home.commune.id}-${home.forecast.forecast[0]?.date ?? "du-bao"}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setToast("Đã xuất báo cáo dự báo 5 ngày.");
+  }
 
   return (
-<<<<<<< Updated upstream
-    <>
-      <section
-        id="top"
-        className="relative min-h-[calc(100dvh-5rem)] scroll-mt-20 overflow-hidden lg:min-h-[calc(100dvh-4.5rem)] lg:scroll-mt-24"
-      >
-        <HeroVideo />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0d1730]/95 via-[#16244a]/55 to-[#16244a]/20" />
-        <div className="bg-contour-light absolute inset-0 opacity-30" aria-hidden />
-        <div className="absolute inset-x-0 bottom-0 hidden h-36 bg-gradient-to-b from-transparent to-bg lg:block" aria-hidden />
-
-        <div className="relative flex min-h-[calc(100dvh-5rem)] flex-col justify-end px-5 pb-24 pt-24 lg:min-h-[calc(100dvh-4.5rem)] lg:px-8 lg:pb-32">
-          <div className="mx-auto w-full max-w-5xl">
-            <p className="font-display text-3xl font-extrabold leading-tight text-white lg:max-w-xl lg:text-4xl">
-              Bảng điều khiển cán bộ xã
-            </p>
-            <p className="mt-2 max-w-md text-sm text-white/75 lg:text-base">
-              Xin chào {official?.display_name}. Dự báo, cảnh báo và tình trạng người dân đã xem, theo thời gian
-              thực.
-            </p>
-          </div>
-=======
     <main id="top" className="min-h-screen scroll-mt-24 bg-bg">
       {toast && (
         <div role="status" className="card card-raised fixed right-5 top-24 z-[100] max-w-sm px-4 py-3 text-sm font-medium text-ink">
           {toast}
->>>>>>> Stashed changes
         </div>
-      </section>
-
-      {home && (
-        <>
-          <div className="relative z-10 mx-auto -mt-16 w-full max-w-5xl px-5 lg:-mt-20 lg:px-8">
-            <div className="max-w-sm">
-              <RiskHeroCard commune={home.commune} today={home.forecast.forecast[0]} current={home.forecast.current} />
-            </div>
-          </div>
-
-          <Section id="du-bao">
-            <Suspense fallback={null}>
-              <ForecastSection communes={communes} defaultCommuneId={focusCommuneId ?? defaultCommuneId} />
-            </Suspense>
-          </Section>
-
-          <Section id="nguoi-dan-da-xem" className="bg-surface-muted/60">
-            <Suspense fallback={null}>
-              <ResidentViewMapSection communes={communes} defaultCommuneId={focusCommuneId ?? defaultCommuneId} />
-            </Suspense>
-          </Section>
-
-          <Section id="thong-bao">
-            <NotificationsSection items={notifications} loadError={notifyError} />
-          </Section>
-
-          <Section id="chatbot" className="bg-surface-muted/60">
-            <ChatSection communes={communes} defaultCommuneId={defaultCommuneId} />
-          </Section>
-        </>
       )}
-<<<<<<< Updated upstream
-    </>
-=======
 
       <div className="mx-auto max-w-[1920px] px-4 pb-8 pt-5 sm:px-6 2xl:px-7">
         <div className="card flex flex-col gap-4 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -640,24 +613,47 @@ function DashboardBody({
       </div>
       <FloatingChatWidget communeId={home.commune.id} />
     </main>
->>>>>>> Stashed changes
   );
 }
 
-export default function OfficialDashboard(props: {
-  communes: Commune[];
-  notifications: NotificationItem[];
-  notifyError: boolean;
-  home: { commune: Commune; forecast: CommuneForecast } | null;
-  focusCommuneId?: string;
-  defaultCommuneId: string;
-}) {
+export default function OfficialDashboard({ communes }: { communes: Commune[] }) {
   const { official, loading } = useRole();
+  const [communeSelection, setCommuneSelection] = useState<{
+    officialId: string;
+    communeId: string;
+  } | null>(null);
+  const [forecastState, setForecastState] = useState<{
+    officialId: string;
+    communeId: string;
+    forecast: CommuneForecast;
+  } | null>(null);
+  const [forecastErrorFor, setForecastErrorFor] = useState<string | null>(null);
+  const selectedCommuneId = official && communeSelection?.officialId === official.id
+    ? communeSelection.communeId
+    : official?.commune_id ?? "";
+
+  useEffect(() => {
+    if (!official || !selectedCommuneId) {
+      setForecastState(null);
+      setForecastErrorFor(null);
+      return;
+    }
+
+    let cancelled = false;
+    setForecastErrorFor(null);
+    fetchForecast(selectedCommuneId, 5)
+      .then((forecast) => {
+        if (!cancelled) setForecastState({ officialId: official.id, communeId: selectedCommuneId, forecast });
+      })
+      .catch(() => {
+        if (!cancelled) setForecastErrorFor(`${official.id}:${selectedCommuneId}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [official, selectedCommuneId]);
 
   if (loading) {
-<<<<<<< Updated upstream
-    return <div className="skeleton mx-5 mt-8 h-64 rounded-lg" />;
-=======
     return <div className="skeleton mx-auto mt-8 h-[620px] max-w-[1500px] rounded-lg" />;
   }
   if (!official) return <OfficialGate communes={communes} />;
@@ -688,12 +684,13 @@ export default function OfficialDashboard(props: {
   }
   if (!forecastState || forecastState.officialId !== official.id || forecastState.communeId !== selectedCommuneId) {
     return <div className="skeleton mx-auto mt-8 h-[620px] max-w-[1500px] rounded-lg" />;
->>>>>>> Stashed changes
   }
 
-  if (!official) {
-    return <OfficialGate communes={props.communes} />;
-  }
-
-  return <DashboardBody {...props} />;
+  return (
+    <DashboardBody
+      communes={communes}
+      home={{ commune: viewedCommune, forecast: forecastState.forecast }}
+      onCommuneChange={(communeId) => setCommuneSelection({ officialId: official.id, communeId })}
+    />
+  );
 }

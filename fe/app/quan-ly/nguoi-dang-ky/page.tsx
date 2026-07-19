@@ -1,7 +1,7 @@
 import { fetchCommunes } from "@/lib/api";
-import OfficialDashboard from "@/components/officer/OfficialDashboard";
+import ResidentManagementDashboard from "@/components/officer/ResidentManagementDashboard";
 
-export default async function OfficerPage() {
+export default async function RegisteredResidentsPage() {
   let data: Awaited<ReturnType<typeof fetchCommunes>> | null = null;
   try {
     data = await fetchCommunes();
@@ -12,11 +12,10 @@ export default async function OfficerPage() {
   if (!data) {
     return (
       <div className="mx-5 mt-8 rounded-lg border border-border bg-surface-muted p-5 text-sm text-ink-muted">
-        Chưa kết nối được máy chủ dữ liệu. Hãy chắc chắn server chính đang chạy ở{" "}
-        <code className="font-data">localhost:8000</code>.
+        Chưa kết nối được máy chủ dữ liệu.
       </div>
     );
   }
 
-  return <OfficialDashboard communes={data.communes} />;
+  return <ResidentManagementDashboard communes={data.communes} />;
 }

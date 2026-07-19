@@ -1,8 +1,5 @@
 "use client";
 
-<<<<<<< Updated upstream
-import { useEffect, useMemo, useState } from "react";
-=======
 import { useEffect, useState } from "react";
 import {
   IconBellRinging,
@@ -16,25 +13,8 @@ import {
   IconWind,
   IconX,
 } from "@tabler/icons-react";
->>>>>>> Stashed changes
 import {
-  fetchCommunesGeoJson,
   fetchForecast,
-<<<<<<< Updated upstream
-  fetchForecastMap,
-  fetchProvinceGeoJson,
-  loginResident,
-  registerResident,
-} from "@/lib/api";
-import type { Commune, CommuneForecast, MapCommuneDay } from "@/lib/types";
-import { useRole } from "@/lib/RoleProvider";
-import WeatherIcon from "@/components/ui/WeatherIcon";
-import HazardBoard from "@/components/forecast/HazardBoard";
-import ScopeToggle from "@/components/forecast/ScopeToggle";
-import CommunePicker from "@/components/forecast/CommunePicker";
-import ForecastMap from "@/components/forecast/ForecastMap";
-import PhoneAuthForm from "@/components/auth/PhoneAuthForm";
-=======
   fetchOfficerAlerts,
   fetchPointForecast,
   fetchRandomPointInCommune,
@@ -53,13 +33,10 @@ import { RISK_BG_CLASS, RISK_TEXT_CLASS, riskBg } from "@/lib/risk";
 import WeatherIcon from "@/components/ui/WeatherIcon";
 import HeroVideo from "@/components/home/HeroVideo";
 import HazardBoard from "@/components/forecast/HazardBoard";
->>>>>>> Stashed changes
 import FloatingChatWidget from "@/components/chat/FloatingChatWidget";
-import HeroVideo from "@/components/home/HeroVideo";
+import AlertSubscriptionForm from "./AlertSubscriptionForm";
 import HazardSoundBanner from "./HazardSoundBanner";
 
-<<<<<<< Updated upstream
-=======
 function dayLabel(day: DayForecast) {
   if (day.day_index === 0) return "Hôm nay";
   if (day.day_index === 1) return "Ngày mai";
@@ -296,7 +273,6 @@ function FiveDayForecast({ days }: { days: DayForecast[] }) {
   );
 }
 
->>>>>>> Stashed changes
 export default function ResidentHome({
   communes,
   defaultCommuneId,
@@ -307,15 +283,7 @@ export default function ResidentHome({
   const { resident, setResident, loading } = useRole();
   const [communeId, setCommuneId] = useState(defaultCommuneId);
   const [syncedResidentId, setSyncedResidentId] = useState<string | null>(null);
-  const [scope, setScope] = useState<"commune" | "province">("commune");
   const [forecast, setForecast] = useState<CommuneForecast | null>(null);
-<<<<<<< Updated upstream
-  const [showAuth, setShowAuth] = useState(false);
-
-  const [provinceGeoJson, setProvinceGeoJson] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [communesGeoJson, setCommunesGeoJson] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [mapToday, setMapToday] = useState<MapCommuneDay[] | null>(null);
-=======
   const [latestAlert, setLatestAlert] = useState<NotificationItem | null>(null);
   const [loadedCommuneId, setLoadedCommuneId] = useState<string | null>(null);
   const [showSubscription, setShowSubscription] = useState(false);
@@ -323,7 +291,6 @@ export default function ResidentHome({
   const [pointTemperature, setPointTemperature] = useState<PointTemperature | null>(null);
   const [myLocationTemp, setMyLocationTemp] = useState<PointTemperature | null>(null);
   const [locating, setLocating] = useState(false);
->>>>>>> Stashed changes
 
   if (resident && resident.id !== syncedResidentId) {
     setSyncedResidentId(resident.id);
@@ -349,46 +316,38 @@ export default function ResidentHome({
 
   useEffect(() => {
     let cancelled = false;
-    fetchForecast(communeId, 5)
-      .then((data) => !cancelled && setForecast(data))
-      .catch(() => !cancelled && setForecast(null));
+    Promise.all([
+      fetchForecast(communeId, 5),
+      fetchOfficerAlerts(communeId).catch(() => [] as NotificationItem[]),
+    ])
+      .then(([forecastData, alerts]) => {
+        if (cancelled) return;
+        setForecast(forecastData);
+        setLatestAlert(alerts[0] ?? null);
+        setLoadedCommuneId(communeId);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setForecast(null);
+        setLatestAlert(null);
+        setLoadedCommuneId(communeId);
+      });
     return () => {
       cancelled = true;
     };
   }, [communeId]);
 
-<<<<<<< Updated upstream
-  useEffect(() => {
-    if (scope !== "province" || provinceGeoJson) return;
-    let cancelled = false;
-    Promise.all([fetchProvinceGeoJson(), fetchCommunesGeoJson(), fetchForecastMap(0)])
-      .then(([province, communesFc, mapDay]) => {
-        if (cancelled) return;
-        setProvinceGeoJson(province);
-        setCommunesGeoJson(communesFc);
-        setMapToday(mapDay.communes);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [scope, provinceGeoJson]);
-=======
   const activeForecast = loadedCommuneId === communeId ? forecast : null;
   const activeAlert = loadedCommuneId === communeId ? latestAlert : null;
   const loadComplete = loadedCommuneId === communeId;
   const today = activeForecast?.forecast[0];
   const activePointTemperature = myLocationTemp ?? (resident?.commune_id === communeId ? pointTemperature : null);
->>>>>>> Stashed changes
 
-  const valueByCommune = useMemo(() => {
-    const out: Record<string, MapCommuneDay> = {};
-    (mapToday || []).forEach((r) => (out[r.commune_id] = r));
-    return out;
-  }, [mapToday]);
-
-  const commune = communes.find((c) => c.id === communeId) ?? communes[0];
-  const today = forecast?.forecast[0];
+  async function acknowledgeAlert() {
+    if (!activeAlert) return;
+    setAcknowledgedAlertId(activeAlert.id);
+    if (resident?.commune_id === communeId) markAlertViewed(activeAlert.id, resident.id).catch(() => {});
+  }
 
   async function useMyLocation() {
     setLocating(true);
@@ -404,36 +363,6 @@ export default function ResidentHome({
   }
 
   return (
-<<<<<<< Updated upstream
-    <>
-      <HazardSoundBanner communeId={communeId} />
-
-      <section
-        id="top"
-        className="relative min-h-[calc(100dvh-5rem)] scroll-mt-20 overflow-hidden lg:min-h-[calc(100dvh-4.5rem)] lg:scroll-mt-24"
-      >
-        <HeroVideo />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0d1730]/95 via-[#16244a]/55 to-[#16244a]/20" />
-        <div className="bg-contour-light absolute inset-0 opacity-30" aria-hidden />
-        <div className="absolute inset-x-0 bottom-0 hidden h-36 bg-gradient-to-b from-transparent to-bg lg:block" aria-hidden />
-
-        <div className="relative flex min-h-[calc(100dvh-5rem)] flex-col justify-end px-5 pb-24 pt-24 lg:min-h-[calc(100dvh-4.5rem)] lg:px-8 lg:pb-32">
-          <div className="mx-auto flex w-full max-w-2xl items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-white/70">
-                {resident ? "Xã của bạn" : "Đang xem"}
-              </p>
-              <h1 className="font-display text-3xl font-extrabold text-white lg:text-4xl">{commune?.name}</h1>
-            </div>
-            {!loading && !resident && (
-              <button
-                type="button"
-                onClick={() => setShowAuth(true)}
-                className="shrink-0 rounded-full border border-white/30 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/10"
-              >
-                Đăng ký nhận cảnh báo
-              </button>
-=======
     <main className="min-h-screen bg-bg pb-24 lg:pb-10">
       <HazardSoundBanner communeId={communeId} />
 
@@ -502,79 +431,8 @@ export default function ResidentHome({
                   Đăng ký nhận cảnh báo
                 </button>
               </section>
->>>>>>> Stashed changes
             )}
-          </div>
-        </div>
-      </section>
 
-<<<<<<< Updated upstream
-      <div className="mx-auto flex max-w-2xl flex-col gap-4 px-5 pb-10">
-        {forecast?.current && (
-          <div className="card card-raised relative z-10 -mt-16 flex items-center gap-4 p-5 lg:-mt-20">
-            <WeatherIcon iconKey={forecast.current.icon_key} className="h-16 w-16 shrink-0 text-primary" />
-            <div>
-              <p className="font-display text-4xl font-extrabold tabular-nums">
-                {forecast.current.temperature_c != null ? Math.round(forecast.current.temperature_c) : "--"}°
-              </p>
-              <p className="text-sm text-ink-muted">{forecast.current.condition}</p>
-            </div>
-          </div>
-        )}
-
-        <div className="flex justify-center">
-          <ScopeToggle scope={scope} onChange={setScope} />
-        </div>
-
-      {scope === "commune" ? (
-        today ? (
-          <HazardBoard day={today} />
-        ) : (
-          <div className="skeleton h-32 rounded-lg" />
-        )
-      ) : (
-        <div className="card overflow-hidden">
-          <div className="relative h-[50vh]">
-            {provinceGeoJson && communesGeoJson ? (
-              <ForecastMap
-                provinceGeoJson={provinceGeoJson}
-                communesGeoJson={communesGeoJson}
-                metric="risk"
-                scope="province"
-                focusCommuneId={communeId}
-                valueByCommune={valueByCommune}
-                domain={[0, 3]}
-                onCommuneClick={(id) => {
-                  setCommuneId(id);
-                  setScope("commune");
-                }}
-              />
-            ) : (
-              <div className="skeleton h-full" />
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="flex justify-center">
-        <CommunePicker communes={communes} value={communeId} onChange={setCommuneId} />
-      </div>
-
-      <p className="text-center text-[11px] text-ink-muted">
-        Dữ liệu thời tiết (Open-Meteo) và cảnh báo sạt lở/lũ quét (NCHMF) là dữ liệu thật.
-      </p>
-
-      {showAuth && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setShowAuth(false)}
-        >
-          <div
-            className="card card-raised w-full max-w-sm p-5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <PhoneAuthForm
-=======
             <p className="mt-4 text-center text-[10px] leading-relaxed text-ink-muted">
               Dữ liệu từ Open-Meteo và cảnh báo NCHMF. Hãy ưu tiên hướng dẫn trực tiếp của chính quyền địa phương khi có tình huống khẩn cấp.
             </p>
@@ -593,23 +451,21 @@ export default function ResidentHome({
               <p className="mt-1 text-sm leading-5 text-ink-muted">Cán bộ xã sẽ dùng thông tin này để gửi cảnh báo đúng địa bàn.</p>
             </div>
             <AlertSubscriptionForm
->>>>>>> Stashed changes
               communes={communes}
               defaultCommuneId={communeId}
-              communeLabel="Xã của bạn"
-              onLogin={loginResident}
-              onRegister={registerResident}
-              onDone={(r) => {
-                setResident(r);
-                setShowAuth(false);
+              currentSubscription={resident}
+              onDone={(result) => {
+                setResident(result);
+                setCommuneId(result.commune_id);
+                setAcknowledgedAlertId(null);
+                setShowSubscription(false);
               }}
             />
           </div>
         </div>
       )}
 
-        <FloatingChatWidget communeId={communeId} />
-      </div>
-    </>
+      <FloatingChatWidget communeId={communeId} />
+    </main>
   );
 }

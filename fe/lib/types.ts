@@ -201,6 +201,7 @@ export interface Resident {
   id: string;
   phone: string;
   display_name: string;
+  address: string;
   commune_id: string;
   lat: number;
   lon: number;
